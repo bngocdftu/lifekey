@@ -6,7 +6,7 @@ The countdown 3-2-1 is not part of the video: start speaking when the title appe
 
 Tips:
 - Record with `Cmd+Shift+5` → **Options** → Microphone: **MacBook Microphone**. Full screen the browser first (`Cmd+Ctrl+F`).
-- Do one dry run without recording. If you fall behind, drop the sentence in *(brackets)*.
+- Do one dry run without recording. If you fall behind, skip the last sentence of that block.
 - The slides say "TideCloak simulated in the browser" on screen, so you do not need to say it.
 - Pause slightly when a slide changes. The slides advance by themselves.
 

@@ -6,7 +6,8 @@ import { useCallback, useEffect, useState } from "react";
 import type { RecordMeta, SafetyAlert } from "@/lib/lifekey/catalogue";
 import { decryptRecord, fmtTime, networkReason, useApi } from "@/lib/client/api";
 import { GrantCard, STATUS_TEXT } from "../../GrantCard";
-import { Icon, IconTile, PatientQR } from "../../ui";
+import { SegBar, SituationMatrix } from "../../charts";
+import { Icon, IconTile, PatientQR, Ring } from "../../ui";
 
 interface PatientView {
   patient: { id: string; publicId: string; displayName: string };
@@ -23,6 +24,7 @@ interface Req {
   recordId: string;
   status: string;
   statusReason?: string;
+  createdAt: number;
   expiresAt: number;
   reason: string;
   doctorUsername: string;
@@ -42,6 +44,13 @@ const ALERT_LOOK: Record<string, { icon: string; tone: "pink" | "orange" | "teal
   condition: { icon: "heart", tone: "green", label: "Bệnh lý" },
   restricted_record: { icon: "lock", tone: "grey", label: "Hồ sơ hạn chế" },
 };
+const TONE_COLOR: Record<string, string> = { pink: "var(--pink)", orange: "var(--orange)", teal: "var(--teal)", green: "var(--green)", grey: "var(--grey)" };
+const ACCESS_LOOK = {
+  read: { label: "Đọc được", color: "var(--positive)" },
+  pending: { label: "Chờ duyệt", color: "var(--warning)" },
+  none: { label: "Chưa có quyền", color: "var(--control)" },
+  restricted: { label: "Hạn chế", color: "var(--grey)", hatched: true },
+} as const;
 
 export default function EmergencyPage() {
   const { publicId } = useParams<{ publicId: string }>();
@@ -158,6 +167,20 @@ export default function EmergencyPage() {
   const records = view.records.filter((r) => r.tier !== 1);
   const recordTitle = (id: string) => view.records.find((r) => r.id === id)?.title;
   const verified = tier1?.alerts.filter((a) => a.category !== "restricted_record").length ?? 0;
+  const access = (r: RecordMeta): keyof typeof ACCESS_LOOK => {
+    const mine = requests.filter((q) => q.recordId === r.id);
+    if (mine.some((q) => q.status === "AUTHORIZED")) return "read";
+    if (mine.some((q) => q.status === "PENDING_APPROVAL")) return "pending";
+    return r.tier === 3 ? "restricted" : "none";
+  };
+  const accessCounts = records.reduce<Record<string, number>>((m, r) => ({ ...m, [access(r)]: (m[access(r)] ?? 0) + 1 }), {});
+  const alertKinds = Object.keys(ALERT_LOOK).map((k) => ({
+    key: k, label: ALERT_LOOK[k].label, color: TONE_COLOR[ALERT_LOOK[k].tone], hatched: k === "restricted_record",
+    value: tier1?.alerts.filter((a) => a.category === k).length ?? 0,
+  }));
+  const fields = tier1 ? Object.values(tier1.dataStatus) : [];
+  const fieldsVerified = fields.filter((v) => v === "clinician_verified").length;
+  const missing = tier1 ? Object.entries(tier1.dataStatus).filter(([, v]) => v === "no_data").map(([k]) => FIELD_TEXT[k] ?? k) : [];
 
   return (
     <>
@@ -181,6 +204,35 @@ export default function EmergencyPage() {
           </div>
         </div>
       </section>
+
+      {tier1 && (
+        <div className="kpis summary" style={{ marginBottom: "var(--gap)" }}>
+          <div className="kpi">
+            <span className="kpi-label">Cảnh báo theo loại</span>
+            <div className="kpi-value">{verified}<small>cảnh báo{alertKinds.find((k) => k.key === "restricted_record")?.value ? " + 1 hạn chế" : ""}</small></div>
+            <div className="kpi-chart"><SegBar label="Cảnh báo theo loại" parts={alertKinds} /></div>
+          </div>
+          <div className="kpi">
+            <span className="kpi-label">Dữ liệu cấp cứu</span>
+            <div className="chart-row">
+              <Ring value={fieldsVerified} total={fields.length} icon="shield" size={60} />
+              <div>
+                <div className="kpi-value" style={{ marginTop: 0 }}>{fieldsVerified}/{fields.length}<small>đã xác minh</small></div>
+                <span className="small faint">{missing.length ? `Chưa có dữ liệu: ${missing.join(", ")}` : "Đủ mọi mục"}</span>
+              </div>
+            </div>
+          </div>
+          <div className="kpi">
+            <span className="kpi-label">Quyền đọc hồ sơ chi tiết</span>
+            <div className="kpi-value">{accessCounts.read ?? 0}/{records.length}<small>đọc được</small></div>
+            <div className="kpi-chart">
+              <SegBar label="Quyền đọc hồ sơ chi tiết" parts={(Object.keys(ACCESS_LOOK) as (keyof typeof ACCESS_LOOK)[]).map((k) => ({
+                key: k, label: ACCESS_LOOK[k].label, color: ACCESS_LOOK[k].color, hatched: "hatched" in ACCESS_LOOK[k], value: accessCounts[k] ?? 0,
+              }))} />
+            </div>
+          </div>
+        </div>
+      )}
 
       {msg && <p className={`notice ${msg.kind === "err" ? "neg" : "acc"}`} style={{ marginBottom: "var(--gap)" }}>{msg.text}</p>}
 
@@ -211,6 +263,19 @@ export default function EmergencyPage() {
               );
             })}
           </section>
+
+          {tier1 && tier1.alerts.length > 0 && (
+            <section className="panel" aria-labelledby="situ-h">
+              <header>
+                <h2 id="situ-h">Cảnh báo theo tình huống</h2>
+                <span className="meta">Trước khi làm gì, xem cột đó</span>
+              </header>
+              <SituationMatrix rows={tier1.alerts.map((a) => {
+                const look = ALERT_LOOK[a.category] ?? ALERT_LOOK.restricted_record;
+                return { id: a.id, label: look.label, sub: `${a.id} · ${a.sourceRecordId}`, color: TONE_COLOR[look.tone], tags: a.contextTags };
+              })} />
+            </section>
+          )}
 
           {dialog && (
             <section className="panel" aria-labelledby="dialog-h">
@@ -319,7 +384,7 @@ export default function EmergencyPage() {
             {tier1 ? (
               <dl className="kv">
                 {Object.entries(tier1.dataStatus).map(([k, v]) => (
-                  <div key={k}><dt>{FIELD_TEXT[k] ?? k}:</dt><dd className={v === "no_data" ? "faint" : ""}>{VERIFY_TEXT[v] ?? v}</dd></div>
+                  <div key={k}><dt>{FIELD_TEXT[k] ?? k}:</dt><dd className={v === "no_data" ? "faint" : ""}><span className={`st${v === "clinician_verified" ? "" : " none"}`}>{VERIFY_TEXT[v] ?? v}</span></dd></div>
                 ))}
                 <div className="stacked"><dt>Người liên hệ:</dt><dd>{tier1.emergencyContact}</dd></div>
               </dl>
@@ -329,7 +394,7 @@ export default function EmergencyPage() {
 
           {requests.slice(0, 2).map((q) => (
             <section key={q.id} className="panel">
-              <GrantCard doctor={q.doctorUsername} recordId={q.recordId} recordTitle={recordTitle(q.recordId)} expiresAt={q.expiresAt} signed={q.status === "AUTHORIZED" ? 2 : 0} needed={2} status={q.status} />
+              <GrantCard doctor={q.doctorUsername} recordId={q.recordId} recordTitle={recordTitle(q.recordId)} expiresAt={q.expiresAt} issuedAt={q.createdAt} signed={q.status === "AUTHORIZED" ? 2 : 0} needed={2} status={q.status} />
               {q.statusReason && <p className="small err" style={{ marginTop: 8 }}>{q.statusReason}</p>}
             </section>
           ))}

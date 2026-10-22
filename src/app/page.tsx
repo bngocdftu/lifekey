@@ -6,7 +6,9 @@ import { short, useApi } from "@/lib/client/api";
 import { PATIENT } from "@/lib/lifekey/catalogue";
 import type { Caller } from "@/lib/auth/caller";
 import { displayName, initials, personTint } from "./AppShell";
-import { IconTile } from "./ui";
+import type { AuditEntry } from "@/lib/lifekey/audit";
+import { AreaChart, Donut, StepTrack } from "./charts";
+import { Icon, IconTile } from "./ui";
 
 // What each demo account does next, in one line and one link.
 const NEXT: Record<string, { text: string; href: string; cta: string }> = {
@@ -18,9 +20,19 @@ const NEXT: Record<string, { text: string; href: string; cta: string }> = {
 };
 
 const WAYS = [
-  { name: "Cảnh báo cấp cứu", icon: "heart", tone: "pink" as const, who: "Mọi bác sĩ đã xác minh", wait: "Ngay khi đăng nhập", how: "Đã duyệt sẵn lúc bệnh nhân đăng ký." },
-  { name: "Xin quyền đọc", icon: "key", tone: "teal" as const, who: "Một bác sĩ, một hồ sơ", wait: "Vài phút", how: "Cần 2 người duyệt. Tự hết hạn sau 2 giờ." },
-  { name: "Mở khẩn cấp", icon: "bolt", tone: "orange" as const, who: "Bác sĩ trực cấp cứu", wait: "Vài giây", how: "Chỉ hồ sơ bệnh nhân cho phép. Ghi lý do, rà soát sau." },
+  { name: "Cảnh báo cấp cứu", icon: "heart", tone: "pink" as const, who: "Mọi bác sĩ đã xác minh", wait: "Ngay khi đăng nhập", speed: 0, how: "Đã duyệt sẵn lúc bệnh nhân đăng ký." },
+  { name: "Xin quyền đọc", icon: "key", tone: "teal" as const, who: "Một bác sĩ, một hồ sơ", wait: "Vài phút", speed: 2, how: "Cần 2 người duyệt. Tự hết hạn sau 2 giờ." },
+  { name: "Mở khẩn cấp", icon: "bolt", tone: "orange" as const, who: "Bác sĩ trực cấp cứu", wait: "Vài giây", speed: 1, how: "Chỉ hồ sơ bệnh nhân cho phép. Ghi lý do, rà soát sau." },
+];
+const SPEED = ["Ngay", "Vài giây", "Vài phút"];
+
+// What an account can do, checked against its roles.
+const CAPS: { label: string; has: (me: Caller) => boolean }[] = [
+  { label: "Xem cảnh báo", has: (m) => m.realmRoles.includes("lifekey-clinician") },
+  { label: "Mở khẩn cấp", has: (m) => m.realmRoles.includes("er-attending") },
+  { label: "Đọc khi có quyền", has: (m) => m.realmRoles.includes("_tide_decryptor") },
+  { label: "Ghi hồ sơ", has: (m) => m.realmRoles.includes("lifekey-recorder") },
+  { label: "Duyệt yêu cầu", has: (m) => m.isApprover },
 ];
 
 // A short to-do per demo account; "done" marks what the sample data already covers.
@@ -62,10 +74,12 @@ export default function HomePage() {
   const api = useApi();
   const [me, setMe] = useState<Caller | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [log, setLog] = useState<AuditEntry[]>([]);
 
   useEffect(() => {
     if (!authenticated) return;
     api<Caller>("/api/session", { method: "POST", body: {} }).then(setMe).catch((e) => setError(e.message));
+    api<{ entries: AuditEntry[] }>("/api/audit").then((d) => setLog(d.entries)).catch(() => undefined);
   }, [authenticated, api]);
 
   if (isInitializing) return <p className="muted">Đang tải…</p>;
@@ -94,6 +108,13 @@ export default function HomePage() {
     );
   }
 
+  // The last 24 hours of the log, one point per hour.
+  const hourNow = Math.floor(Date.now() / 3600_000) * 3600;
+  const hours = Array.from({ length: 24 }, (_, i) => hourNow - (23 - i) * 3600);
+  const perHour = hours.map((h) => log.filter((e) => e.at >= h && e.at < h + 3600).length);
+  const hourLabels = hours.map((h) => new Date(h * 1000).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }));
+  const denied = log.filter((e) => e.outcome === "denied" || e.outcome === "error").length;
+
   const next = me ? NEXT[me.username] : undefined;
   const steps = me ? STEPS[me.username] ?? [] : [];
 
@@ -106,6 +127,26 @@ export default function HomePage() {
         </div>
       </div>
       {error && <p className="notice neg" style={{ marginBottom: 20 }}>Không tải được tài khoản: {error}</p>}
+
+      {log.length > 0 && (
+        <div className="chart-grid">
+          <section className="panel span-8" aria-labelledby="act-h">
+            <header>
+              <h2 id="act-h">Hoạt động 24 giờ qua</h2>
+              <span className="meta num">{perHour.reduce((a, b) => a + b, 0)} việc · <a className="link" href="/audit">Xem nhật ký</a></span>
+            </header>
+            <AreaChart points={perHour} labels={hourLabels} label="Số việc trong nhật ký mỗi giờ, 24 giờ qua" />
+          </section>
+          <section className="panel span-4" aria-labelledby="out-h">
+            <header><h2 id="out-h">Kết quả truy cập</h2></header>
+            <Donut label="Kết quả truy cập" size={116} center={`${Math.round(((log.length - denied) / log.length) * 100)}%`} sub="thành công"
+              parts={[
+                { key: "ok", label: "Thành công", value: log.length - denied, color: "var(--positive)" },
+                { key: "bad", label: "Bị từ chối", value: denied, color: "var(--negative)" },
+              ]} />
+          </section>
+        </div>
+      )}
 
       <div className="grid">
         <div className="stack span-8">
@@ -138,6 +179,7 @@ export default function HomePage() {
                   <b>{w.name}</b>
                   <span>{w.who}</span>
                   <span className="pill" style={{ marginTop: 2 }}>{w.wait}</span>
+                  <StepTrack steps={SPEED} at={w.speed} />
                   <span>{w.how}</span>
                 </div>
               ))}
@@ -157,6 +199,16 @@ export default function HomePage() {
                 <div><dt>Khoá Tide:</dt><dd className="mono">{short(me.tideUserKey || "—", 6)}</dd></div>
                 <div><dt>Người duyệt:</dt><dd>{me.isApprover ? "Có" : "Không"}</dd></div>
               </dl>
+              <div style={{ marginTop: 14 }}>
+                <span className="small faint" style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                  <span>Việc tài khoản này làm được</span><b className="num" style={{ color: "var(--text)" }}>{CAPS.filter((c) => c.has(me)).length}/{CAPS.length}</b>
+                </span>
+                <ul className="caps">
+                  {CAPS.map((c) => (
+                    <li key={c.label} className={c.has(me) ? "on" : "off"}><Icon name={c.has(me) ? "tick" : "x"} />{c.label}</li>
+                  ))}
+                </ul>
+              </div>
               <div className="inset" style={{ marginTop: 14 }}>
                 <span className="small faint" style={{ display: "block", marginBottom: 8 }}>Vai trò</span>
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>

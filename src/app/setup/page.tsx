@@ -4,6 +4,8 @@ import { useTideCloak } from "@tidecloak/nextjs";
 import { useCallback, useEffect, useState } from "react";
 import { PATIENT, RECORDS, SYNTHETIC_PLAINTEXT } from "@/lib/lifekey/catalogue";
 import { encryptRecord, fmtTime, networkReason, useApi } from "@/lib/client/api";
+import { BarList, DotMatrix, Meter } from "../charts";
+import { Ring } from "../ui";
 
 interface PolicyRow {
   name: string;
@@ -13,6 +15,19 @@ interface PolicyRow {
   statusReason?: string;
   signed: boolean;
 }
+
+const TIER_LOOK: Record<number, { label: string; color: string }> = {
+  1: { label: "Tier 1 · cảnh báo", color: "var(--pink)" },
+  2: { label: "Tier 2 · chi tiết", color: "var(--teal)" },
+  3: { label: "Tier 3 · hạn chế", color: "var(--grey)" },
+};
+// Who may open a record, by tier and the patient's break-glass choice.
+const ACCESS_COLS = [
+  { key: "clinician", label: "Bác sĩ đã xác minh" },
+  { key: "jit", label: "Xin quyền (2 chữ ký)" },
+  { key: "bg", label: "Mở khẩn cấp" },
+  { key: "recorder", label: "Phòng hồ sơ ghi" },
+];
 
 const KIND_TEXT: Record<string, string> = {
   "tier1-standing": "Bác sĩ đã xác minh xem cảnh báo cấp cứu",
@@ -27,7 +42,7 @@ export default function SetupPage() {
   const api = useApi();
   const [rows, setRows] = useState<PolicyRow[]>([]);
   const [stored, setStored] = useState<string[]>([]);
-  const [log, setLog] = useState<{ id: string; ok: boolean; text: string }[]>([]);
+  const [log, setLog] = useState<{ id: string; ok: boolean; text: string; size?: number }[]>([]);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -66,7 +81,7 @@ export default function SetupPage() {
         const { policy } = await api<{ policy: string }>(`/api/policies?purpose=write&record=${r.id}`);
         const ciphertext = await encryptRecord(JSON.stringify(SYNTHETIC_PLAINTEXT[r.id]), r.id, policy);
         await api(`/api/records/${r.id}`, { method: "PUT", body: { ciphertext } });
-        out.push({ id: r.id, ok: true, text: `Đã mã hoá trên máy này, máy chủ chỉ nhận ${ciphertext.length.toLocaleString("vi-VN")} ký tự mã hoá.` });
+        out.push({ id: r.id, ok: true, size: ciphertext.length, text: `Đã mã hoá trên máy này, máy chủ chỉ nhận ${ciphertext.length.toLocaleString("vi-VN")} ký tự mã hoá.` });
       } catch (e) {
         out.push({ id: r.id, ok: false, text: networkReason(e) });
       }
@@ -99,10 +114,53 @@ export default function SetupPage() {
       </div>
       {err && <p className="notice neg" style={{ marginBottom: 24 }}>{err}</p>}
 
-      <div className="kpis" style={{ marginBottom: 8 }}>
-        <div className="kpi"><div className="kpi-label">Quyền đã ký</div><div className="kpi-value">{signed}<small>/ {rows.length || 6}</small></div></div>
-        <div className="kpi"><div className="kpi-label">Hồ sơ đã nhập</div><div className="kpi-value">{stored.length}<small>/ {RECORDS.length}</small></div></div>
-        <div className="kpi"><div className="kpi-label">Hồ sơ cho mở khẩn cấp</div><div className="kpi-value">{RECORDS.filter((r) => r.breakGlassEligible).length}</div></div>
+      <div className="kpis summary" style={{ marginBottom: "var(--gap)" }}>
+        <div className="kpi">
+          <div className="kpi-label">Quyền đã ký</div>
+          <div className="kpi-value">{signed}<small>/ {rows.length || 6}</small></div>
+          <div className="kpi-chart"><Meter value={signed} total={rows.length || 6} label="Quyền đã ký" tone={allSigned ? "var(--positive)" : "var(--accent)"} /></div>
+        </div>
+        <div className="kpi">
+          <div className="kpi-label">Hồ sơ đã nhập</div>
+          <div className="chart-row">
+            <Ring value={stored.length} total={RECORDS.length} icon="file" size={56} />
+            <div className="kpi-value" style={{ marginTop: 0 }}>{stored.length}<small>/ {RECORDS.length} hồ sơ</small></div>
+          </div>
+        </div>
+        <div className="kpi">
+          <div className="kpi-label">Hồ sơ theo mức bảo vệ</div>
+          <div className="kpi-value">{RECORDS.length}<small>hồ sơ · {RECORDS.filter((r) => r.breakGlassEligible).length} cho mở khẩn cấp</small></div>
+          <div className="kpi-chart">
+            <BarList rows={[1, 2, 3].map((t) => ({ key: String(t), label: TIER_LOOK[t].label, value: RECORDS.filter((r) => r.tier === t).length, color: TIER_LOOK[t].color }))} />
+          </div>
+        </div>
+      </div>
+
+      <div className="chart-grid">
+        <section className="panel span-7" aria-labelledby="who-open-h">
+          <header><h2 id="who-open-h">Ai mở được hồ sơ nào</h2><span className="meta">Theo điều bệnh nhân đồng ý</span></header>
+          <DotMatrix
+            rows={RECORDS.map((r) => ({ key: r.id, label: <><b>{r.title}</b><span>{r.id} · Tier {r.tier}</span></> }))}
+            cols={ACCESS_COLS}
+            cell={(id, col) => {
+              const r = RECORDS.find((x) => x.id === id)!;
+              const color = TIER_LOOK[r.tier].color;
+              if (col === "recorder") return { color, tip: `Phòng hồ sơ ghi được ${id} nhưng không đọc lại được`, hollow: true };
+              if (col === "clinician" && r.tier === 1) return { color, tip: `Mọi bác sĩ đã xác minh đọc được ${id}` };
+              if (col === "jit" && r.tier === 2) return { color, tip: `Một bác sĩ đọc được ${id} khi đủ 2 chữ ký, trong 2 giờ` };
+              if (col === "bg" && r.breakGlassEligible) return { color, tip: `Bác sĩ trực mở khẩn cấp được ${id}, có rà soát sau` };
+              return null;
+            }} />
+          <p className="small faint" style={{ marginTop: 10 }}>Ô đặc: được đọc. Ô rỗng: chỉ được ghi.</p>
+        </section>
+        <section className="panel span-5" aria-labelledby="ct-h">
+          <header><h2 id="ct-h">Máy chủ nhận được gì</h2><span className="meta">Ký tự bản mã</span></header>
+          {log.some((l) => l.size) ? (
+            <BarList unit="" rows={log.filter((l) => l.size).map((l) => ({ key: l.id, label: <span className="mono">{l.id}</span>, value: l.size!, color: "var(--grey)", note: `${l.id}: ký tự bản mã` }))} />
+          ) : (
+            <p className="small muted">Sau khi nhập hồ sơ, biểu đồ này cho thấy độ dài bản mã máy chủ nhận cho từng hồ sơ. Máy chủ không bao giờ thấy bản rõ.</p>
+          )}
+        </section>
       </div>
 
       <div className="setting">

@@ -2,6 +2,7 @@
 
 import { fmtTime } from "@/lib/client/api";
 import { displayName, initials, personTint } from "./AppShell";
+import { TimeLeft } from "./charts";
 import { IconTile, Ring } from "./ui";
 
 // One read grant, laid out like an appointment card: what it opens, for whom, until when, and how
@@ -11,6 +12,8 @@ export function GrantCard(props: {
   recordId: string;
   recordTitle?: string;
   expiresAt?: number;
+  /** When the grant was asked for; with expiresAt it draws the time-left bar once authorized. */
+  issuedAt?: number;
   signed: number;
   needed: number;
   signers?: string[];
@@ -18,7 +21,7 @@ export function GrantCard(props: {
   verb?: string;
   person?: boolean;
 }) {
-  const { doctor, recordId, recordTitle, expiresAt, signed, needed, signers = [], status, verb = "Quyền đọc", person = true } = props;
+  const { doctor, recordId, recordTitle, expiresAt, issuedAt, signed, needed, signers = [], status, verb = "Quyền đọc", person = true } = props;
   const left = expiresAt ? expiresAt - Math.floor(Date.now() / 1000) : undefined;
   return (
     <div className="grant">
@@ -43,6 +46,7 @@ export function GrantCard(props: {
         <div><dt>Hồ sơ:</dt><dd className="mono">{recordId}</dd></div>
         <div><dt>Hết hạn:</dt><dd className="num">{expiresAt ? (left !== undefined && left > 0 ? fmtTime(expiresAt) : "Đã hết hạn") : "—"}</dd></div>
       </dl>
+      {status === "AUTHORIZED" && issuedAt && expiresAt && <TimeLeft issuedAt={issuedAt} expiresAt={expiresAt} />}
       <div className="inset ring-wrap">
         <Ring value={signed} total={needed} icon="shield" />
         <div>

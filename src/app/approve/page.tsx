@@ -7,6 +7,7 @@ import { approveChangeRequests, denyChangeRequest, type ApproveResult } from "@/
 import { displayName, initials, personTint } from "../AppShell";
 import { Icon, IconTile } from "../ui";
 import { GrantCard } from "../GrantCard";
+import { Donut, Meter, Timeline } from "../charts";
 
 interface Item {
   policyName: string;
@@ -32,7 +33,7 @@ interface BG {
   status: string;
   overdue: boolean;
   notified: string[];
-  reviews: { reviewer: string; decision: string; note: string }[];
+  reviews: { reviewer: string; decision: string; note: string; at?: number }[];
 }
 
 // Standing grants are written the way an approver would say them.
@@ -57,6 +58,14 @@ const BG_STATUS: Record<string, { text: string; cls: string }> = {
   AWAITING_REVIEW: { text: "Chờ rà soát", cls: "warn" },
   JUSTIFIED: { text: "Hợp lý", cls: "pos" },
   FLAGGED: { text: "Bị gắn cờ", cls: "neg" },
+};
+
+// Short names and colours for the queue donut.
+const KIND_LOOK: Record<string, { label: string; color: string }> = {
+  "emergency-jit": { label: "Xin quyền đọc", color: "var(--teal)" },
+  "tier1-standing": { label: "Xem cảnh báo", color: "var(--pink)" },
+  "recorder-write": { label: "Ghi hồ sơ", color: "var(--green)" },
+  "break-glass-standing": { label: "Mở khẩn cấp", color: "var(--orange)" },
 };
 
 function since(t: number) {
@@ -164,6 +173,9 @@ export default function ApprovePage() {
   const sel = tab === "requests" ? items.find((i) => i.changeRequestId === selected) : undefined;
   const selBg = tab === "reviews" ? events.find((e) => e.id === selected) : undefined;
   const result = sel ? results.find((r) => r.id === sel.changeRequestId) : undefined;
+  const now = Math.floor(Date.now() / 1000);
+  const kinds = Object.entries(KIND_LOOK).map(([k, v]) => ({ key: k, ...v, value: items.filter((i) => i.kind === k).length }));
+  const who = (it: Item) => it.subject.type === "User" ? displayName(it.subject.username ?? "?") : SUBJECT_TEXT[it.subject.id ?? ""] ?? it.subject.id;
 
   return (
     <>
@@ -187,6 +199,53 @@ export default function ApprovePage() {
       </div>
 
       {err && <p className="notice neg" style={{ marginBottom: 24 }}>{err}</p>}
+
+      {loaded && (items.length > 0 || events.length > 0) && (
+        <div className="chart-grid">
+          <section className="panel span-4" aria-labelledby="q-h">
+            <header><h2 id="q-h">Hàng chờ theo loại</h2></header>
+            <Donut label="Yêu cầu chờ ký theo loại" parts={kinds} center={items.length} sub="chờ ký" size={120} />
+          </section>
+          <section className="panel span-4" aria-labelledby="sig-h">
+            <header><h2 id="sig-h">Tiến độ chữ ký</h2><span className="meta">Cần {items[0]?.changeRequest?.threshold ?? 2} chữ ký</span></header>
+            <ul className="rows">
+              {items.slice(0, 5).map((it) => {
+                const n = it.changeRequest?.authorizationCount ?? 0, t = it.changeRequest?.threshold ?? 2;
+                return (
+                  <li key={it.changeRequestId} className="row" style={{ display: "grid", gap: 6, minHeight: 0, padding: "9px 0" }}>
+                    <span className="small" style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                      <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{who(it)} · <span className="mono">{it.recordId}</span></span>
+                      <b className="num">{n}/{t}</b>
+                    </span>
+                    <Meter value={n} total={t} label={`Chữ ký cho ${it.recordId}`} tone={n >= t ? "var(--positive)" : "var(--accent)"} />
+                  </li>
+                );
+              })}
+              {!items.length && <li className="small muted">Không có yêu cầu nào chờ ký.</li>}
+            </ul>
+          </section>
+          <section className="panel span-4" aria-labelledby="due-h">
+            <header><h2 id="due-h">Hạn rà soát 72 giờ</h2></header>
+            <ul className="rows">
+              {events.slice(0, 4).map((e) => {
+                const total = e.reviewDueAt - e.declaredAt, used = Math.min(total, now - e.declaredAt), left = Math.max(0, e.reviewDueAt - now);
+                const done = e.status !== "AWAITING_REVIEW";
+                return (
+                  <li key={e.id} className="row" style={{ display: "grid", gap: 6, minHeight: 0, padding: "9px 0" }}>
+                    <span className="small" style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                      <span>{displayName(e.doctorUsername)} · <span className="mono">{e.recordId}</span></span>
+                      <b className="num" style={{ color: e.overdue ? "var(--negative)" : undefined }}>{done ? BG_STATUS[e.status]?.text : e.overdue ? "Quá hạn" : `còn ${Math.round(left / 3600)} giờ`}</b>
+                    </span>
+                    <Meter value={done ? total : used} total={total} label={`Thời gian rà soát đã dùng cho ${e.id}`} tone={done ? "var(--positive)" : e.overdue ? "var(--negative)" : "var(--warning)"} />
+                    <span className="small faint">{e.reviews.length}/2 người đã rà soát</span>
+                  </li>
+                );
+              })}
+              {!events.length && <li className="small muted">Chưa có lần mở khẩn cấp nào.</li>}
+            </ul>
+          </section>
+        </div>
+      )}
 
       <div className="inbox" data-open={selected ? "true" : "false"}>
         <div className="inbox-side">
@@ -292,6 +351,14 @@ export default function ApprovePage() {
                 <div><dt>Đã báo:</dt><dd>{selBg.notified.map((n) => NOTIFIED_TEXT[n] ?? n).join(", ")}</dd></div>
                 <div><dt>Hạn rà soát:</dt><dd className="num" style={{ color: selBg.overdue ? "var(--negative)" : undefined }}>{fmtTime(selBg.reviewDueAt)}</dd></div>
               </dl>
+              <div style={{ margin: "16px 0 4px" }}>
+                <Timeline label={`Dòng thời gian của ${selBg.id}`} start={selBg.declaredAt} end={selBg.reviewDueAt} now={selBg.status === "AWAITING_REVIEW" ? now : undefined}
+                  marks={[
+                    { at: selBg.declaredAt, text: `${displayName(selBg.doctorUsername)} mở hồ sơ`, tone: "var(--orange)" },
+                    ...selBg.reviews.filter((r) => r.at).map((r) => ({ at: r.at!, text: `${displayName(r.reviewer)}: ${r.decision === "justified" ? "hợp lý" : "không hợp lý"}`, tone: r.decision === "justified" ? "var(--positive)" : "var(--negative)" })),
+                    { at: selBg.reviewDueAt, text: "Hạn rà soát", tone: "var(--label)" },
+                  ]} />
+              </div>
               {selBg.reviews.length > 0 && (
                 <div className="rows" style={{ marginTop: 12 }}>
                   {selBg.reviews.map((r) => (

@@ -4,6 +4,16 @@ import { useTideCloak } from "@tidecloak/nextjs";
 import { useCallback, useEffect, useState } from "react";
 import { decryptRecord, encryptRecord, networkReason, useApi } from "@/lib/client/api";
 import { displayName } from "../AppShell";
+import { BarList, Donut, DotMatrix } from "../charts";
+
+const ACCOUNTS = ["admin", "doctor-a", "doctor-b", "doctor-c", "doctor-d"];
+// Who stops each "deny" check, from the design's test table.
+const BLOCKER: Record<string, string> = { A2: "ork", A3: "ork", A4: "ork", A5: "ork", A6: "ork", D1: "ork", D2: "ork", R1: "ork", B1: "ork", S1: "tidecloak" };
+const BLOCKER_LOOK: Record<string, { label: string; color: string }> = {
+  ork: { label: "Mạng Tide chặn", color: "var(--teal)" },
+  tidecloak: { label: "TideCloak chặn", color: "var(--orange)" },
+  none: { label: "Cho phép", color: "var(--grey)" },
+};
 
 // Live proof that the NETWORK enforces "this doctor, this record, this operation, until then".
 // Every check runs the real encrypt/decrypt against the Tide ORKs with whoever is signed in.
@@ -108,6 +118,8 @@ export default function ProofPage() {
   const others = checks.filter((c) => !c.who.includes(me));
   const done = mine.filter((c) => results[c.id] && results[c.id].outcome !== "skipped");
   const passed = done.filter((c) => (results[c.id].outcome === "allowed") === (c.expect === "allow"));
+  const skipped = mine.filter((c) => results[c.id]?.outcome === "skipped").length;
+  const blockers = Object.entries(BLOCKER_LOOK).map(([k, v]) => ({ key: k, label: v.label, color: v.color, value: checks.filter((c) => (BLOCKER[c.id] ?? "none") === k).length }));
 
   return (
     <>
@@ -130,6 +142,40 @@ export default function ProofPage() {
         Trang này cố ý đưa mọi quyền và mọi bản mã cho bất kỳ ai đăng nhập. Nếu chỉ máy chủ giữ an toàn, các phép thử "phải từ chối" sẽ lọt qua. Chúng bị chặn vì mạng Tide kiểm tra người gọi, hồ sơ và quyền ở mỗi lần giải mã.
         {authorizedA ? <> Quyền của A đang dùng: <span className="mono">{authorizedA.id}</span>.</> : " Chưa có quyền MED-204 nào của A được duyệt."}
       </p>
+
+      <div className="chart-grid">
+        <section className="panel span-4" aria-labelledby="res-h">
+          <header><h2 id="res-h">Kết quả của bạn</h2></header>
+          <Donut label="Kết quả phép thử" size={120} center={`${passed.length}/${mine.length}`} sub="đúng"
+            parts={[
+              { key: "pass", label: "Đúng", value: passed.length, color: "var(--positive)" },
+              { key: "fail", label: "Sai", value: done.length - passed.length, color: "var(--negative)" },
+              { key: "skip", label: "Chưa chạy được", value: skipped, color: "var(--warning)" },
+              { key: "todo", label: "Chưa chạy", value: mine.length - done.length - skipped, color: "var(--control)" },
+            ]} />
+        </section>
+        <section className="panel span-8" aria-labelledby="blk-h">
+          <header><h2 id="blk-h">Ai chặn các phép thử</h2><span className="meta">{checks.length} phép thử</span></header>
+          <BarList rows={blockers.map((b) => ({ key: b.key, label: b.label, value: b.value, color: b.color }))} />
+          <p className="small faint" style={{ marginTop: 12 }}>Máy chủ LifeKey không chặn phép thử nào ở đây: mọi quyền và bản mã đều được phát cho người gọi, và mạng Tide vẫn từ chối.</p>
+        </section>
+        <section className="panel span-12" aria-labelledby="mx-h">
+          <header>
+            <h2 id="mx-h">Phép thử theo tài khoản</h2>
+            <span className="legend-inline"><span><i style={{ background: "var(--positive)" }} />Mong đợi cho phép</span><span><i style={{ background: "transparent", boxShadow: "inset 0 0 0 2px var(--negative)" }} />Mong đợi từ chối</span></span>
+          </header>
+          <DotMatrix
+            rows={checks.map((c) => ({ key: c.id, label: <><b>{c.id}</b><span>{c.title.length > 52 ? `${c.title.slice(0, 50)}…` : c.title}</span></> }))}
+            cols={ACCOUNTS.map((a) => ({ key: a, label: a === me ? `${displayName(a)} (bạn)` : displayName(a) }))}
+            cell={(id, acc) => {
+              const c = checks.find((x) => x.id === id)!;
+              if (!c.who.includes(acc)) return null;
+              return c.expect === "allow"
+                ? { color: "var(--positive)", tip: `${displayName(acc)} · ${id}: mong đợi cho phép` }
+                : { color: "var(--negative)", hollow: true, tip: `${displayName(acc)} · ${id}: mong đợi từ chối` };
+            }} />
+        </section>
+      </div>
 
       <div className="as-list">
         <div className="table-wrap">

@@ -229,6 +229,10 @@ esac
 # container user's writes to the H2 database. Linux keeps the bind mount into ./data.
 if [ "$(uname)" = "Darwin" ]; then
   docker volume rm lifekey-tidecloak-h2 >/dev/null 2>&1 || true
+  docker volume create lifekey-tidecloak-h2 >/dev/null
+  # A fresh volume is owned by root; Keycloak runs as uid 1000.
+  docker run --rm --user root --entrypoint chown -v lifekey-tidecloak-h2:/opt/keycloak/data/h2 \
+    "$TIDECLOAK_IMAGE" 1000:1000 /opt/keycloak/data/h2
   H2_MOUNT="lifekey-tidecloak-h2:/opt/keycloak/data/h2"
 else
   H2_MOUNT="$PROJECT_DIR/data:/opt/keycloak/data/h2"

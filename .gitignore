@@ -1,0 +1,14 @@
+node_modules/
+.next/
+.env
+data/*
+!data/.gitkeep
+next-env.d.ts
+*.tsbuildinfo
+.taste-skill/
+.claude/
+skills-lock.json
+AGENTS.md
+branding/
+
+!data/tidecloak.json

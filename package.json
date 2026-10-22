@@ -1,0 +1,32 @@
+{
+  "name": "lifekey",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --webpack",
+    "build": "next build --webpack",
+    "start": "next start",
+    "init": "bash scripts/init-tidecloak.sh",
+    "test": "node --test --experimental-strip-types src/lib/lifekey/*.test.ts",
+    "typecheck": "tsc --noEmit",
+    "preview": "LIFEKEY_PREVIEW=1 NEXT_PUBLIC_LIFEKEY_PREVIEW=1 next dev --webpack -p 3100",
+    "unit": "npm test"
+  },
+  "dependencies": {
+    "@tidecloak/js": "0.14.41",
+    "@tidecloak/nextjs": "0.14.40",
+    "@tideorg/js": "0.14.29",
+    "heimdall-tide": "0.14.41",
+    "jose": "^6.0.0",
+    "next": "^16.0.0",
+    "qrcode": "^1.5.4",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/qrcode": "^1.5.5",
+    "@types/react": "^19.0.0",
+    "typescript": "^5.0.0"
+  }
+}

@@ -1,10 +1,10 @@
-# Quay video demo (2 phút)
+# Recording the demo video (2 minutes)
 
-Yêu cầu của ban tổ chức: file `.mp4`, dưới 100 MB, đặt trong repo (ví dụ `docs/demo.mp4`), dài khoảng 2 phút, theo 4 phần: khả năng mới, rào cản, bản thử và vai trò của TideCloak, điều gì thay đổi.
+Organisers' requirements: an `.mp4` file, under 100 MB, placed in the repo (e.g. `docs/demo.mp4`), about 2 minutes long, in 4 parts: the new possibility, the constraint, the prototype and TideCloak's role, what changes.
 
-## Chạy bản xem trước trên máy quay
+## Run the preview on the recording machine
 
-Cần Node 20 trở lên (`node -v`). Không cần Docker hay TideCloak.
+Requires Node 20 or later (`node -v`). No Docker or TideCloak needed.
 
 ```bash
 git clone https://github.com/bngocdftu/lifekey.git
@@ -13,43 +13,43 @@ npm install
 npm run preview
 ```
 
-Mở http://localhost:3100. Đổi tài khoản bằng cách thêm `?as=...` vào cuối địa chỉ, hoặc bấm tên ở góc dưới thanh bên trái:
+Open http://localhost:3100. Switch accounts by adding `?as=...` to the end of the address, or click the name at the bottom of the left sidebar:
 
-| Tài khoản | Địa chỉ |
+| Account | Address |
 |---|---|
-| Bác sĩ A (xin quyền, mở khẩn cấp) | http://localhost:3100/?as=doctor-a |
-| Bác sĩ B (người duyệt) | http://localhost:3100/approve?as=doctor-b |
-| Bác sĩ C (người duyệt) | http://localhost:3100/approve?as=doctor-c |
-| Bệnh nhân Alice (đồng ý, xem ai đã mở hồ sơ) | http://localhost:3100/me?as=patient-alice |
-| Phòng hồ sơ | http://localhost:3100/setup?as=admin |
+| Doctor A (requests access, breaks glass) | http://localhost:3100/?as=doctor-a |
+| Doctor B (approver) | http://localhost:3100/approve?as=doctor-b |
+| Doctor C (approver) | http://localhost:3100/approve?as=doctor-c |
+| Patient Alice (consent, sees who opened the record) | http://localhost:3100/me?as=patient-alice |
+| Records office | http://localhost:3100/setup?as=admin |
 
-Dữ liệu mẫu nằm trong bộ nhớ trình duyệt: tải lại trang là về trạng thái ban đầu. Muốn quay giao diện điện thoại: Chrome → chuột phải → Inspect → bật biểu tượng điện thoại (Toggle device toolbar) → chọn iPhone 14.
+The sample data lives in browser memory: reloading the page resets it. To record the phone layout: Chrome → right-click → Inspect → turn on the phone icon (Toggle device toolbar) → choose iPhone 14.
 
-Quay màn hình trên macOS: `Cmd + Shift + 5` → Record Selected Portion. Trên Windows: `Win + Alt + R` (Xbox Game Bar).
+Screen recording on macOS: `Cmd + Shift + 5` → Record Selected Portion. On Windows: `Win + Alt + R` (Xbox Game Bar).
 
-## Kịch bản
+## Script
 
-| Thời gian | Nói | Trên màn hình |
+| Time | Say | On screen |
 |---|---|---|
-| 0:00–0:20 **Khả năng mới** | "3 giờ sáng, một bệnh nhân bất tỉnh vào cấp cứu. Bác sĩ cần biết ngay bệnh nhân đang dùng thuốc chống đông, dị ứng penicillin, có van tim cơ học." | `?as=doctor-a` → mở **Bệnh nhân**. Lướt chậm qua 4 cảnh báo cấp cứu và thẻ mã QR. |
-| 0:20–0:40 **Rào cản** | "Hệ thống bình thường để server và admin giữ khoá: hack server hoặc một người nội bộ là đọc được mọi hồ sơ. Nên bệnh viện không dám mở hồ sơ chi tiết rộng rãi." | Vẫn ở trang bệnh nhân, chỉ vào phần **Hồ sơ chi tiết**: mỗi hồ sơ cần quyền đọc riêng. |
-| 0:40–1:15 **Bản thử: xin quyền và 2 người duyệt** | "Bác sĩ A xin đọc danh sách thuốc. TideCloak tạo một quyền chỉ cho A, chỉ hồ sơ này, hết hạn sau 2 giờ. Quyền chỉ có hiệu lực khi đủ 2 người duyệt ký bằng tài khoản Tide của chính họ." | Bấm **Xin quyền đọc** ở thẻ hồ sơ, nhập lý do, gửi. Đổi sang `/approve?as=doctor-b` → chọn yêu cầu → thẻ quyền đọc có vòng **1/2 chữ ký** → **Ký duyệt**. Đổi sang `?as=doctor-c` → ký → **2/2**. |
-| 1:15–1:35 **Bản thử: mạng Tide chặn sai người, sai hồ sơ** | "Kể cả khi quyền và bản mã bị lộ, mạng Tide vẫn từ chối người khác, kể cả chính bệnh nhân, và quyền đọc MED-204 không mở được MED-205. Máy chủ cũng không tự ký thay ai được." | `/proof?as=patient-alice` → bảng các phép thử (P1 dùng quyền của A → từ chối). |
-| 1:35–1:50 **Mở khẩn cấp** | "Khi không chờ được, bác sĩ trực mở ngay những hồ sơ bệnh nhân đã cho phép từ trước. Mọi bên được báo, hai người rà soát trong 72 giờ." | `?as=doctor-a` → **Mở khẩn cấp** ở thẻ danh sách thuốc. Rồi `/approve?as=doctor-b` → tab **Mở khẩn cấp**. |
-| 1:50–2:00 **Điều gì thay đổi** | "Bệnh nhân cho đội cấp cứu thấy điều quan trọng mà không lộ mọi thứ. Không admin, server hay AI nào tự mở được hồ sơ một mình." | Quay lại trang bệnh nhân. Logo LifeKey. |
+| 0:00–0:20 **The new possibility** | "3 a.m., an unconscious patient arrives in the ER. The doctor needs to know right away that the patient is on an anticoagulant, is allergic to penicillin and has a mechanical heart valve." | `?as=doctor-a` → open **Patient**. Scroll slowly past the 4 emergency alerts and the QR code card. |
+| 0:20–0:40 **The constraint** | "Ordinary systems let the server and admins hold the keys: hack the server, or be one insider, and you can read every record. So hospitals don't dare open detailed records widely." | Still on the patient page, point at **Detailed records**: each record needs its own read grant. |
+| 0:40–1:15 **Prototype: requesting access and 2 approvers** | "Doctor A asks to read the medication list. TideCloak creates a grant for A only, for this record only, expiring after 2 hours. The grant takes effect only once 2 approvers sign it with their own Tide accounts." | Click **Request access** on the record card, enter a reason, send. Switch to `/approve?as=doctor-b` → select the request → the grant card shows a **1/2 signatures** ring → **Approve**. Switch to `?as=doctor-c` → sign → **2/2**. |
+| 1:15–1:35 **Prototype: the Tide network blocks the wrong person and the wrong record** | "Even if the grant and the ciphertext leak, the Tide network still refuses anyone else, including the approver who just signed that grant, and a read grant for MED-204 cannot open MED-205. The server cannot sign on anyone's behalf either." | `/proof?as=doctor-b` → the table of checks (B2 uses A's grant → denied). |
+| 1:35–1:50 **Break glass** | "When there's no time to wait, the on-duty doctor immediately opens the records the patient allowed in advance. Everyone is notified, and two people review it within 72 hours." | `?as=doctor-a` → **Break glass** on the medication list card. Then `/approve?as=doctor-b` → the **Break-glass** tab. |
+| 1:50–2:00 **What changes** | "Patients let emergency teams see what matters without exposing everything. No admin, server or AI can open a record on its own." | Back to the patient page. LifeKey logo. |
 
-## Ghi chú trung thực cho video
+## Honesty note for the video
 
-Bản xem trước dùng dữ liệu mẫu và không kết nối mạng Tide. Nên nói một câu ngắn ở cuối hoặc ghi chữ trên màn hình:
+The preview uses sample data and is not connected to the Tide network. Say one short sentence at the end or put a caption on screen:
 
-> "TideCloak đã được tích hợp và khởi tạo thật (realm, licence, 5 tài khoản demo). Hôm 22/10 mạng ORK của Tide lỗi (chỉ 6 trên 20 node phản hồi) nên chúng tôi quay luồng duyệt ở chế độ xem trước."
+> "TideCloak was really integrated and initialised (realm, licence, 5 demo accounts). On 22 Oct the Tide ORK network was failing (only 6 of 20 nodes responded), so we recorded the approval flow in preview mode."
 
-Nếu có thể, chèn 5–10 giây quay màn hình lỗi "Could not reach enough NEW ORKs (got 6 of 20 required)" làm bằng chứng.
+If possible, insert 5–10 seconds of screen recording of the "Could not reach enough NEW ORKs (got 6 of 20 required)" error as evidence.
 
-## Nén video cho dưới 100 MB
+## Compress the video to under 100 MB
 
 ```bash
 ffmpeg -i demo-raw.mov -vf "scale=1280:-2" -c:v libx264 -crf 28 -preset veryfast -c:a aac -b:a 96k docs/demo.mp4
 ```
 
-Không có ffmpeg: macOS QuickTime → File → Export As → 720p cũng thường dưới 100 MB cho 2 phút.
+Without ffmpeg: macOS QuickTime → File → Export As → 720p is also usually under 100 MB for 2 minutes.

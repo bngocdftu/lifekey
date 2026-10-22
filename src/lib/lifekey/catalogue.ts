@@ -41,14 +41,14 @@ export interface SafetyAlert {
 export const PATIENT: Patient = {
   id: "PAT-001",
   publicId: "p_8f29a1",
-  displayName: "Alice Nguyen (giả lập)",
+  displayName: "Alice Nguyen (synthetic)",
 };
 
 export const RECORDS: RecordMeta[] = [
-  { id: "T1-PAT-001", patientId: "PAT-001", tier: 1, title: "Tóm tắt cấp cứu", category: "summary", breakGlassEligible: false },
-  { id: "MED-204", patientId: "PAT-001", tier: 2, title: "Danh sách thuốc đầy đủ", category: "medications", breakGlassEligible: true },
-  { id: "MED-205", patientId: "PAT-001", tier: 2, title: "Tiền sử phẫu thuật", category: "surgical_history", breakGlassEligible: false },
-  { id: "PSY-301", patientId: "PAT-001", tier: 3, title: "Hồ sơ sức khoẻ tâm thần", category: "mental_health", breakGlassEligible: false },
+  { id: "T1-PAT-001", patientId: "PAT-001", tier: 1, title: "Emergency summary", category: "summary", breakGlassEligible: false },
+  { id: "MED-204", patientId: "PAT-001", tier: 2, title: "Full medication list", category: "medications", breakGlassEligible: true },
+  { id: "MED-205", patientId: "PAT-001", tier: 2, title: "Surgical history", category: "surgical_history", breakGlassEligible: false },
+  { id: "PSY-301", patientId: "PAT-001", tier: 3, title: "Mental health record", category: "mental_health", breakGlassEligible: false },
 ];
 
 /** Which patient each patient account is. The account signs that patient's consent and sees their log. */
@@ -68,7 +68,7 @@ export const TIER1_ALERTS: SafetyAlert[] = [
     id: "ALERT-88",
     sourceRecordId: "MED-204",
     category: "high_risk_medication",
-    message: "Đang dùng warfarin 5 mg/ngày (chống đông). Nguy cơ chảy máu: kiểm tra INR trước thủ thuật.",
+    message: "Takes warfarin 5 mg/day (anticoagulant). Bleeding risk: check INR before any procedure.",
     contextTags: ["trauma", "surgery", "bleeding"],
     verificationStatus: "clinician_verified",
     verifiedAt: "2026-10-20T10:00:00Z",
@@ -78,7 +78,7 @@ export const TIER1_ALERTS: SafetyAlert[] = [
     id: "ALERT-87",
     sourceRecordId: "MED-204",
     category: "allergy",
-    message: "Dị ứng penicillin: sốc phản vệ (2019). Tránh nhóm beta-lactam.",
+    message: "Penicillin allergy: anaphylaxis (2019). Avoid beta-lactam antibiotics.",
     contextTags: ["all"],
     verificationStatus: "clinician_verified",
     verifiedAt: "2026-10-20T10:00:00Z",
@@ -88,7 +88,7 @@ export const TIER1_ALERTS: SafetyAlert[] = [
     id: "ALERT-89",
     sourceRecordId: "MED-205",
     category: "implant",
-    message: "Van tim cơ học (2021). Không chụp MRI khi chưa xác minh loại van.",
+    message: "Mechanical heart valve (2021). No MRI until the valve type is confirmed.",
     contextTags: ["imaging", "all"],
     verificationStatus: "clinician_verified",
     verifiedAt: "2026-10-20T10:00:00Z",
@@ -99,7 +99,7 @@ export const TIER1_ALERTS: SafetyAlert[] = [
     id: "ALERT-90",
     sourceRecordId: "PSY-301",
     category: "restricted_record",
-    message: "Có hồ sơ hạn chế liên quan đến tương tác thuốc an thần. Cân nhắc trước khi dùng benzodiazepine.",
+    message: "A restricted record concerns sedative drug interactions. Review before giving a benzodiazepine.",
     contextTags: ["sedation"],
     verificationStatus: "clinician_verified",
     verifiedAt: "2026-10-20T10:00:00Z",
@@ -113,7 +113,7 @@ export const TIER1_ALERTS: SafetyAlert[] = [
  */
 export const SYNTHETIC_PLAINTEXT: Record<string, unknown> = {
   "T1-PAT-001": {
-    patient: "Alice Nguyen (giả lập)",
+    patient: "Alice Nguyen (synthetic)",
     bloodType: "O+",
     alerts: TIER1_ALERTS,
     dataStatus: {
@@ -122,24 +122,24 @@ export const SYNTHETIC_PLAINTEXT: Record<string, unknown> = {
       implants: "clinician_verified",
       pregnancy: "no_data",
     },
-    emergencyContact: "Bob Nguyen (giả lập), 0900 000 000",
+    emergencyContact: "Bob Nguyen (synthetic), 0900 000 000",
   },
   "MED-204": {
     medications: [
-      { name: "Warfarin", dose: "5 mg", frequency: "1 lần/ngày", since: "2021-06", indication: "Van tim cơ học", lastINR: { value: 2.8, at: "2026-10-12" } },
-      { name: "Metoprolol", dose: "25 mg", frequency: "2 lần/ngày", since: "2021-06" },
-      { name: "Atorvastatin", dose: "20 mg", frequency: "1 lần/ngày", since: "2023-02" },
+      { name: "Warfarin", dose: "5 mg", frequency: "once daily", since: "2021-06", indication: "Mechanical heart valve", lastINR: { value: 2.8, at: "2026-10-12" } },
+      { name: "Metoprolol", dose: "25 mg", frequency: "twice daily", since: "2021-06" },
+      { name: "Atorvastatin", dose: "20 mg", frequency: "once daily", since: "2023-02" },
     ],
-    allergies: [{ substance: "Penicillin", reaction: "Sốc phản vệ", year: 2019 }],
+    allergies: [{ substance: "Penicillin", reaction: "Anaphylaxis", year: 2019 }],
     source: "Synthetic EHR export, FHIR MedicationStatement-like",
   },
   "MED-205": {
     procedures: [
-      { name: "Thay van hai lá (van cơ học)", year: 2021, hospital: "Synthetic General Hospital" },
-      { name: "Cắt ruột thừa", year: 2009 },
+      { name: "Mitral valve replacement (mechanical valve)", year: 2021, hospital: "Synthetic General Hospital" },
+      { name: "Appendectomy", year: 2009 },
     ],
   },
   "PSY-301": {
-    note: "Hồ sơ Tier 3 giả lập. Chỉ dùng để chứng minh grant Tier 2 không mở được Tier 3.",
+    note: "Synthetic Tier 3 record. Used only to show that a Tier 2 grant cannot open Tier 3.",
   },
 };

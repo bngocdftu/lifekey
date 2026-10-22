@@ -5,8 +5,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { RECORDS } from "./catalogue.ts";
 import { policyMismatches, policyName, policyParams, standingGrants, validateGrant, type DescribedPolicy } from "./grants.ts";
-import { applySignedPolicy, canApprove, createEmergencyRequest, effectiveStatus, requestDigest, type EmergencyRequest } from "./requests.ts";
-import { declareBreakGlass, isOverdue, reviewBreakGlass, type BreakGlassEvent } from "./breakglass.ts";
+import { applySignedPolicy, askClarification, canApprove, createEmergencyRequest, effectiveStatus, requestDigest, requestGrant, type EmergencyRequest } from "./requests.ts";
+import { declareBreakGlass, isOverdue, objectToBreakGlass, reviewBreakGlass, type BreakGlassEvent } from "./breakglass.ts";
 import { appendAudit, verifyAuditChain, type AuditEntry } from "./audit.ts";
 import { applyConsent, consentChanges, recordConsent, TIER0_MAX_LENGTH, type ConsentInput, type PatientConsent } from "./consent.ts";
 
@@ -195,4 +195,49 @@ test("consent drives break-glass: no consent, no break-glass grant or declaratio
   const input = { id: "BG-9", patientId: "PAT-001", doctorUsername: "doctor-a", doctorKey: A_KEY, doctorRoles: ["er-attending"], reason: "Unconscious, bleeding, anticoagulant unknown" };
   assert.ok("errors" in declareBreakGlass({ ...input, recordId: "MED-204" }, [], NOW, recs));
   assert.ok("event" in declareBreakGlass({ ...input, recordId: "MED-205" }, [], NOW, recs));
+});
+
+// ---- Requests each role can make ----
+
+test("patient self-request: own records, any tier, named to the patient's own key", () => {
+  const mk = (recordId: string, patientId = "PAT-001") => createEmergencyRequest(
+    { patientId, recordId, doctorUsername: "patient-alice", doctorKey: "alice-key", reason: "I want to review my own record", ttlSeconds: 3600, purpose: "patient-self" },
+    NOW, "REQ-2001", (spec, id) => policyName(spec, id),
+  );
+  for (const id of ["T1-PAT-001", "MED-204", "PSY-301"]) {
+    const r = mk(id);
+    assert.ok("request" in r, `${id}: ${JSON.stringify(r)}`);
+    const g = requestGrant(r.request);
+    assert.equal(g.kind, "patient-self");
+    assert.deepEqual(g.subject, { type: "User", id: "alice-key" });
+  }
+  assert.ok("errors" in mk("MED-204", "PAT-999"));
+  // A clinical request still opens Tier 2 only.
+  assert.ok("errors" in newRequest({ recordId: "PSY-301" }));
+  // The purpose is bound into the digest: flipping it later is detected.
+  const r = mk("PSY-301");
+  assert.ok("request" in r);
+  assert.equal(applySignedPolicy({ ...r.request, purpose: "clinical" }, signedPolicyFor(r.request), NOW).status, "FAILED_VALIDATION");
+});
+
+test("approver can ask the requester for more detail, only on a pending request, not their own", () => {
+  const r = pending();
+  const asked = askClarification(r, "doctor-b", "Is there a recent INR result?", NOW);
+  assert.ok("request" in asked);
+  assert.equal(asked.request.clarifications?.length, 1);
+  assert.equal(requestDigest(asked.request), r.digest, "a question does not change what is granted");
+  assert.ok("error" in askClarification(r, "doctor-a", "self", NOW));
+  assert.ok("error" in askClarification(r, "doctor-b", "", NOW));
+  assert.ok("error" in askClarification({ ...r, status: "AUTHORIZED" }, "doctor-b", "Is there a recent INR result?", NOW));
+});
+
+test("patient can object to a break-glass on their own record, once, and reviewers see it", () => {
+  const d = declareBreakGlass({ id: "BG-1", patientId: "PAT-001", recordId: "MED-204", doctorUsername: "doctor-a", doctorKey: A_KEY, doctorRoles: ["er-attending"], reason: "Unconscious, bleeding, anticoagulant unknown" }, [], NOW);
+  assert.ok("event" in d);
+  assert.ok("error" in objectToBreakGlass(d.event, "PAT-002", "I do not consent", NOW));
+  assert.ok("error" in objectToBreakGlass(d.event, "PAT-001", "", NOW));
+  const o = objectToBreakGlass(d.event, "PAT-001", "I was conscious then; no need to open it", NOW);
+  assert.ok("event" in o);
+  assert.equal(o.event.patientObjection?.note, "I was conscious then; no need to open it");
+  assert.ok("error" in objectToBreakGlass(o.event, "PAT-001", "second time", NOW));
 });

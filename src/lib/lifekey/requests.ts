@@ -17,8 +17,19 @@ export type RequestStatus =
   | "REVOKED"
   | "FAILED_VALIDATION";
 
+/** "clinical": a doctor asks for a Tier 2 record. "patient-self": the patient asks for their own record. */
+export type RequestPurpose = "clinical" | "patient-self";
+
+export interface Clarification {
+  by: string;
+  text: string;
+  at: number;
+}
+
 export interface EmergencyRequest {
   id: string;
+  /** Absent on requests filed before patients could ask; those are clinical. */
+  purpose?: RequestPurpose;
   patientId: string;
   recordId: string;
   alertId?: string;
@@ -36,6 +47,8 @@ export interface EmergencyRequest {
   digest: string;
   policyName: string;
   changeRequestId?: string;
+  /** Questions from approvers. Not bound into the digest: asking does not change what is granted. */
+  clarifications?: Clarification[];
 }
 
 export interface NewRequestInput {
@@ -46,11 +59,14 @@ export interface NewRequestInput {
   doctorKey: string;
   reason: string;
   ttlSeconds: number;
+  purpose?: RequestPurpose;
 }
 
 /** The fields a request is bound to. Changing any of them after filing breaks the digest. */
-function bindingFields(r: Pick<EmergencyRequest, "id" | "patientId" | "recordId" | "alertId" | "doctorUsername" | "doctorKey" | "reason" | "createdAt" | "expiresAt">) {
+function bindingFields(r: Pick<EmergencyRequest, "id" | "purpose" | "patientId" | "recordId" | "alertId" | "doctorUsername" | "doctorKey" | "reason" | "createdAt" | "expiresAt">) {
   return {
+    // Only bound when set, so digests of requests filed before `purpose` existed stay valid.
+    ...(r.purpose && r.purpose !== "clinical" ? { purpose: r.purpose } : {}),
     id: r.id,
     patientId: r.patientId,
     recordId: r.recordId,
@@ -68,8 +84,8 @@ export function requestDigest(r: Parameters<typeof bindingFields>[0]): string {
   return createHash("sha256").update(JSON.stringify(bindingFields(r))).digest("hex");
 }
 
-export function requestGrant(r: Pick<EmergencyRequest, "doctorKey" | "recordId" | "expiresAt">): GrantSpec {
-  return { kind: "emergency-jit", subject: { type: "User", id: r.doctorKey }, recordId: r.recordId, access: "read", expiry: r.expiresAt };
+export function requestGrant(r: Pick<EmergencyRequest, "doctorKey" | "recordId" | "expiresAt" | "purpose">): GrantSpec {
+  return { kind: r.purpose === "patient-self" ? "patient-self" : "emergency-jit", subject: { type: "User", id: r.doctorKey }, recordId: r.recordId, access: "read", expiry: r.expiresAt };
 }
 
 export function createEmergencyRequest(
@@ -84,15 +100,17 @@ export function createEmergencyRequest(
   if (record.patientId !== input.patientId) errors.push(`${input.recordId} does not belong to ${input.patientId}`);
   if (!input.doctorUsername) errors.push("doctor is required");
   if (!input.doctorKey) errors.push("doctor has no tideuserkey: they must sign in with Tide first");
-  if (input.reason.trim().length < 10) errors.push("give a clinical reason (at least 10 characters)");
+  if (input.reason.trim().length < 10) errors.push("give a reason (at least 10 characters)");
 
+  const purpose = input.purpose ?? "clinical";
   const expiresAt = now + Math.floor(input.ttlSeconds);
-  const spec = requestGrant({ doctorKey: input.doctorKey, recordId: input.recordId, expiresAt });
+  const spec = requestGrant({ doctorKey: input.doctorKey, recordId: input.recordId, expiresAt, purpose });
   errors.push(...validateGrant(spec, now));
   if (errors.length) return { errors };
 
   const base = {
     id,
+    ...(purpose === "patient-self" ? { purpose } : {}),
     patientId: input.patientId,
     recordId: input.recordId,
     alertId: input.alertId,
@@ -128,6 +146,15 @@ export function applySignedPolicy(r: EmergencyRequest, policy: DescribedPolicy, 
   }
   if (now >= r.expiresAt) return { ...r, status: "EXPIRED" };
   return { ...r, status: "AUTHORIZED" };
+}
+
+/** An approver asks the requester for more detail before signing. */
+export function askClarification(r: EmergencyRequest, approver: string, text: string, now: number): { request: EmergencyRequest } | { error: string } {
+  if (approver === r.doctorUsername) return { error: "you cannot question your own request" };
+  if (r.status !== "PENDING_APPROVAL") return { error: `request is ${r.status}` };
+  const t = text.trim();
+  if (t.length < 5) return { error: "write the question (at least 5 characters)" };
+  return { request: { ...r, clarifications: [...(r.clarifications ?? []), { by: approver, text: t.slice(0, 500), at: now }] } };
 }
 
 /** App-level guard on top of the realm rule that the requester is not an approver. */

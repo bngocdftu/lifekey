@@ -10,8 +10,8 @@ import { previewFetch } from "./fixtures";
 const USERS: Record<string, { roles: string[]; approver: boolean }> = {
   admin: { roles: ["lifekey-recorder", "_tide_encryptor"], approver: true },
   "doctor-a": { roles: ["lifekey-clinician", "er-attending", "_tide_decryptor"], approver: false },
-  "doctor-b": { roles: [], approver: true },
-  "doctor-c": { roles: [], approver: true },
+  "doctor-b": { roles: ["_tide_decryptor"], approver: true },
+  "doctor-c": { roles: ["_tide_decryptor"], approver: true },
   "patient-alice": { roles: ["lifekey-patient", "_tide_decryptor"], approver: false },
 };
 

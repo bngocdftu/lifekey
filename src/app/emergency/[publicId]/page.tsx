@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import type { RecordMeta, SafetyAlert } from "@/lib/lifekey/catalogue";
 import { decryptRecord, fmtTime, networkReason, useApi } from "@/lib/client/api";
+import { displayName } from "../../AppShell";
 import { GrantCard, STATUS_TEXT } from "../../GrantCard";
 import { SegBar, SituationMatrix } from "../../charts";
 import { Icon, IconTile, PatientQR, Ring } from "../../ui";
@@ -28,28 +29,29 @@ interface Req {
   expiresAt: number;
   reason: string;
   doctorUsername: string;
+  clarifications?: { by: string; text: string; at: number }[];
 }
 
 const VERIFY_TEXT: Record<string, string> = {
-  clinician_verified: "bác sĩ đã xác minh",
-  patient_reported: "bệnh nhân tự khai",
-  unverified: "chưa xác minh",
-  no_data: "chưa có dữ liệu",
+  clinician_verified: "clinician verified",
+  patient_reported: "patient reported",
+  unverified: "unverified",
+  no_data: "no data",
 };
-const FIELD_TEXT: Record<string, string> = { allergies: "Dị ứng", medications: "Thuốc", implants: "Thiết bị cấy ghép", pregnancy: "Thai kỳ" };
+const FIELD_TEXT: Record<string, string> = { allergies: "Allergies", medications: "Medications", implants: "Implants", pregnancy: "Pregnancy" };
 const ALERT_LOOK: Record<string, { icon: string; tone: "pink" | "orange" | "teal" | "green" | "grey"; label: string }> = {
-  high_risk_medication: { icon: "pill", tone: "orange", label: "Thuốc nguy cơ cao" },
-  allergy: { icon: "allergy", tone: "pink", label: "Dị ứng" },
-  implant: { icon: "heart", tone: "teal", label: "Thiết bị cấy ghép" },
-  condition: { icon: "heart", tone: "green", label: "Bệnh lý" },
-  restricted_record: { icon: "lock", tone: "grey", label: "Hồ sơ hạn chế" },
+  high_risk_medication: { icon: "pill", tone: "orange", label: "High-risk medication" },
+  allergy: { icon: "allergy", tone: "pink", label: "Allergy" },
+  implant: { icon: "heart", tone: "teal", label: "Implant" },
+  condition: { icon: "heart", tone: "green", label: "Condition" },
+  restricted_record: { icon: "lock", tone: "grey", label: "Restricted record" },
 };
 const TONE_COLOR: Record<string, string> = { pink: "var(--pink)", orange: "var(--orange)", teal: "var(--teal)", green: "var(--green)", grey: "var(--grey)" };
 const ACCESS_LOOK = {
-  read: { label: "Đọc được", color: "var(--positive)" },
-  pending: { label: "Chờ duyệt", color: "var(--warning)" },
-  none: { label: "Chưa có quyền", color: "var(--control)" },
-  restricted: { label: "Hạn chế", color: "var(--grey)", hatched: true },
+  read: { label: "Readable", color: "var(--positive)" },
+  pending: { label: "Pending approval", color: "var(--warning)" },
+  none: { label: "No grant", color: "var(--control)" },
+  restricted: { label: "Restricted", color: "var(--grey)", hatched: true },
 } as const;
 
 export default function EmergencyPage() {
@@ -87,7 +89,7 @@ export default function EmergencyPage() {
           report(t1.id, false, networkReason(e));
         }
       } else {
-        setTier1Error("Bệnh nhân này chưa có bản tóm tắt cấp cứu.");
+        setTier1Error("This patient has no emergency summary yet.");
       }
       const r = await api<{ requests: Req[] }>("/api/emergency-requests");
       setRequests(r.requests);
@@ -106,7 +108,7 @@ export default function EmergencyPage() {
 
   async function openRecord(record: RecordMeta, via: "request" | "break-glass", requestId?: string) {
     const ct = view?.records.find((r) => r.id === record.id)?.ciphertext;
-    if (!ct) return setOpened((o) => ({ ...o, [record.id]: { error: "Hồ sơ này chưa được nhập." } }));
+    if (!ct) return setOpened((o) => ({ ...o, [record.id]: { error: "This record has not been entered yet." } }));
     try {
       const q = via === "request" ? `purpose=request&record=${record.id}&request=${requestId}` : `purpose=break-glass&record=${record.id}`;
       const { policy } = await api<{ policy: string }>(`/api/policies?${q}`);
@@ -129,11 +131,11 @@ export default function EmergencyPage() {
           method: "POST",
           body: { patientId: view.patient.id, recordId: dialog.record.id, alertId: dialog.alertId, reason },
         });
-        setMsg({ kind: "ok", text: `Đã gửi ${r.request.id}. Hồ sơ mở được khi đủ 2 người duyệt ký.` });
+        setMsg({ kind: "ok", text: `Sent ${r.request.id}. The record opens once 2 approvers sign.` });
       } else {
         await api("/api/break-glass", { method: "POST", body: { patientId: view.patient.id, recordId: dialog.record.id, reason } });
         await openRecord(dialog.record, "break-glass");
-        setMsg({ kind: "ok", text: `Đã mở ${dialog.record.id}. Bệnh nhân, người liên hệ và người duyệt trực đã được báo.` });
+        setMsg({ kind: "ok", text: `Opened ${dialog.record.id}. The patient, emergency contact and on-call approvers have been notified.` });
       }
       setDialog(null);
       setReason("");
@@ -148,20 +150,20 @@ export default function EmergencyPage() {
   if (!authenticated) {
     return (
       <>
-        <div className="title-row"><div><h1>Hồ sơ bệnh nhân</h1><p className="sub">Đăng nhập để xem. Mã QR chỉ chứa <span className="mono">{publicId}</span>, không chứa dữ liệu y tế hay khoá.</p></div></div>
-        <button className="btn primary" onClick={login}>Đăng nhập bằng Tide</button>
+        <div className="title-row"><div><h1>Patient record</h1><p className="sub">Sign in to view. The QR code holds only <span className="mono">{publicId}</span>, no medical data or keys.</p></div></div>
+        <button className="btn primary" onClick={login}>Sign in with Tide</button>
       </>
     );
   }
   if (notFound) {
     return (
       <>
-        <div className="title-row"><div><h1>Không có hồ sơ</h1><p className="sub">Không tìm thấy bệnh nhân với mã <span className="mono">{publicId}</span>.</p></div></div>
-        <div className="empty">Bệnh nhân chưa có hồ sơ trên LifeKey. Hãy tạo hồ sơ cấp cứu tạm tại khoa và không suy đoán tiền sử.</div>
+        <div className="title-row"><div><h1>No record</h1><p className="sub">No patient found with ID <span className="mono">{publicId}</span>.</p></div></div>
+        <div className="empty">This patient has no record on LifeKey. Start a temporary emergency record on the ward and do not assume any history.</div>
       </>
     );
   }
-  if (!view) return <p className="muted">Đang tải…</p>;
+  if (!view) return <p className="muted">Loading…</p>;
 
   const erAttending = hasRealmRole("er-attending");
   const records = view.records.filter((r) => r.tier !== 1);
@@ -184,23 +186,23 @@ export default function EmergencyPage() {
 
   return (
     <>
-      <section className="panel" style={{ marginBottom: "var(--gap)" }} aria-label="Bệnh nhân">
+      <section className="panel" style={{ marginBottom: "var(--gap)" }} aria-label="Patient">
         <div className="head" style={{ justifyContent: "space-between", flexWrap: "wrap", gap: 16 }}>
           <div className="head">
             <span className="avatar" style={{ width: 56, height: 56, fontSize: 18, background: "var(--teal-soft)", color: "var(--teal)" }}>AN</span>
             <div>
-              <span className="label">Bệnh nhân</span>
+              <span className="label">Patient</span>
               <h1 style={{ fontSize: 24, lineHeight: "30px", fontWeight: 700, letterSpacing: "-0.02em" }}>{view.patient.displayName}</h1>
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
                 <span className="pill">{view.patient.id}</span>
-                {tier1 && <span className="pill gold">Nhóm máu {tier1.bloodType}</span>}
-                {tier1 && <span className="pill neg">{verified} cảnh báo</span>}
+                {tier1 && <span className="pill gold">Blood type {tier1.bloodType}</span>}
+                {tier1 && <span className="pill neg">{verified} alerts</span>}
               </div>
             </div>
           </div>
           <div className="title-row" style={{ margin: 0, alignItems: "center" }}>
-            <span className="stamp">{loadedAt ? `Cập nhật ${fmtTime(loadedAt)}` : ""}</span>
-            <button className="btn icon" onClick={load} aria-label="Tải lại"><Icon name="refresh" /></button>
+            <span className="stamp">{loadedAt ? `Updated ${fmtTime(loadedAt)}` : ""}</span>
+            <button className="btn icon" onClick={load} aria-label="Reload"><Icon name="refresh" /></button>
           </div>
         </div>
       </section>
@@ -208,25 +210,25 @@ export default function EmergencyPage() {
       {tier1 && (
         <div className="kpis summary" style={{ marginBottom: "var(--gap)" }}>
           <div className="kpi">
-            <span className="kpi-label">Cảnh báo theo loại</span>
-            <div className="kpi-value">{verified}<small>cảnh báo{alertKinds.find((k) => k.key === "restricted_record")?.value ? " + 1 hạn chế" : ""}</small></div>
-            <div className="kpi-chart"><SegBar label="Cảnh báo theo loại" parts={alertKinds} /></div>
+            <span className="kpi-label">Alerts by type</span>
+            <div className="kpi-value">{verified}<small>alerts{alertKinds.find((k) => k.key === "restricted_record")?.value ? " + 1 restricted" : ""}</small></div>
+            <div className="kpi-chart"><SegBar label="Alerts by type" parts={alertKinds} /></div>
           </div>
           <div className="kpi">
-            <span className="kpi-label">Dữ liệu cấp cứu</span>
+            <span className="kpi-label">Emergency data</span>
             <div className="chart-row">
               <Ring value={fieldsVerified} total={fields.length} icon="shield" size={60} />
               <div>
-                <div className="kpi-value" style={{ marginTop: 0 }}>{fieldsVerified}/{fields.length}<small>đã xác minh</small></div>
-                <span className="small faint">{missing.length ? `Chưa có dữ liệu: ${missing.join(", ")}` : "Đủ mọi mục"}</span>
+                <div className="kpi-value" style={{ marginTop: 0 }}>{fieldsVerified}/{fields.length}<small>verified</small></div>
+                <span className="small faint">{missing.length ? `No data: ${missing.join(", ")}` : "All fields present"}</span>
               </div>
             </div>
           </div>
           <div className="kpi">
-            <span className="kpi-label">Quyền đọc hồ sơ chi tiết</span>
-            <div className="kpi-value">{accessCounts.read ?? 0}/{records.length}<small>đọc được</small></div>
+            <span className="kpi-label">Read grants for detailed records</span>
+            <div className="kpi-value">{accessCounts.read ?? 0}/{records.length}<small>readable</small></div>
             <div className="kpi-chart">
-              <SegBar label="Quyền đọc hồ sơ chi tiết" parts={(Object.keys(ACCESS_LOOK) as (keyof typeof ACCESS_LOOK)[]).map((k) => ({
+              <SegBar label="Read grants for detailed records" parts={(Object.keys(ACCESS_LOOK) as (keyof typeof ACCESS_LOOK)[]).map((k) => ({
                 key: k, label: ACCESS_LOOK[k].label, color: ACCESS_LOOK[k].color, hatched: "hatched" in ACCESS_LOOK[k], value: accessCounts[k] ?? 0,
               }))} />
             </div>
@@ -240,10 +242,10 @@ export default function EmergencyPage() {
         <div className="stack span-8">
           <section className="panel" aria-labelledby="alerts-h">
             <header>
-              <h2 id="alerts-h">Cảnh báo cấp cứu</h2>
-              <span className="meta">Mọi bác sĩ đã xác minh đều thấy</span>
+              <h2 id="alerts-h">Emergency alerts</h2>
+              <span className="meta">Every verified clinician sees these</span>
             </header>
-            {tier1Error && <p className="notice neg">Không mở được bản tóm tắt: {tier1Error}</p>}
+            {tier1Error && <p className="notice neg">Could not open the summary: {tier1Error}</p>}
             {tier1?.alerts.map((a) => {
               const src = view.records.find((r) => r.id === a.sourceRecordId);
               const look = ALERT_LOOK[a.category] ?? ALERT_LOOK.restricted_record;
@@ -252,12 +254,12 @@ export default function EmergencyPage() {
                   <IconTile name={look.icon} tone={look.tone} />
                   <div>
                     <p className="msg">{a.message}</p>
-                    <span className="src">{look.label} · {VERIFY_TEXT[a.verificationStatus]}{a.verifiedAt ? ` ${fmtTime(Date.parse(a.verifiedAt) / 1000)}` : ""} · nguồn {a.sourceRecordId}</span>
+                    <span className="src">{look.label} · {VERIFY_TEXT[a.verificationStatus]}{a.verifiedAt ? ` ${fmtTime(Date.parse(a.verifiedAt) / 1000)}` : ""} · source {a.sourceRecordId}</span>
                   </div>
                   {src?.tier === 2 ? (
-                    <button className="link" onClick={() => setDialog({ mode: "request", record: src, alertId: a.id })}>Xem hồ sơ gốc</button>
+                    <button className="link" onClick={() => setDialog({ mode: "request", record: src, alertId: a.id })}>View source record</button>
                   ) : (
-                    <span className="small faint">Không mở khi cấp cứu</span>
+                    <span className="small faint">Not opened in emergencies</span>
                   )}
                 </div>
               );
@@ -267,8 +269,8 @@ export default function EmergencyPage() {
           {tier1 && tier1.alerts.length > 0 && (
             <section className="panel" aria-labelledby="situ-h">
               <header>
-                <h2 id="situ-h">Cảnh báo theo tình huống</h2>
-                <span className="meta">Trước khi làm gì, xem cột đó</span>
+                <h2 id="situ-h">Alerts by situation</h2>
+                <span className="meta">Before acting, check that column</span>
               </header>
               <SituationMatrix rows={tier1.alerts.map((a) => {
                 const look = ALERT_LOOK[a.category] ?? ALERT_LOOK.restricted_record;
@@ -283,40 +285,40 @@ export default function EmergencyPage() {
                 <div className="head">
                   <IconTile name={dialog.mode === "break-glass" ? "bolt" : "key"} tone={dialog.mode === "break-glass" ? "orange" : "teal"} round />
                   <div>
-                    <span className="label">{dialog.mode === "break-glass" ? "Mở khẩn cấp:" : "Xin quyền đọc:"}</span>
+                    <span className="label">{dialog.mode === "break-glass" ? "Break glass:" : "Request access:"}</span>
                     <span className="value" id="dialog-h">{dialog.record.title}</span>
                   </div>
                 </div>
-                <button className="btn ghost icon" onClick={() => setDialog(null)} aria-label="Huỷ"><Icon name="close" /></button>
+                <button className="btn ghost icon" onClick={() => setDialog(null)} aria-label="Cancel"><Icon name="close" /></button>
               </header>
               <div className="field">
-                <label htmlFor="reason">Lý do lâm sàng</label>
+                <label htmlFor="reason">Clinical reason</label>
                 <textarea id="reason" className="input" rows={3} value={reason} onChange={(e) => setReason(e.target.value)}
-                  placeholder={dialog.mode === "break-glass" ? "Ví dụ: bất tỉnh, đang chảy máu, cần biết thuốc chống đông" : "Ví dụ: đánh giá nguy cơ chảy máu trước khi khâu"} />
+                  placeholder={dialog.mode === "break-glass" ? "E.g. unconscious, bleeding, need to know anticoagulants" : "E.g. assess bleeding risk before suturing"} />
               </div>
               <ul className="checks" style={{ margin: "16px 0" }}>
                 {dialog.mode === "break-glass" ? (
                   <>
-                    <li><Icon name="tick" />Mở ngay, không cần chờ ai duyệt</li>
-                    <li><Icon name="tick" />Bệnh nhân, người liên hệ và người duyệt trực được báo</li>
-                    <li><Icon name="tick" />Hai người duyệt rà soát trong 72 giờ</li>
+                    <li><Icon name="tick" />Opens now, no approval needed</li>
+                    <li><Icon name="tick" />Patient, emergency contact and on-call approvers are notified</li>
+                    <li><Icon name="tick" />Two approvers review it within 72 h</li>
                   </>
                 ) : (
                   <>
-                    <li><Icon name="tick" />Chỉ bạn đọc được, chỉ hồ sơ {dialog.record.id}</li>
-                    <li><Icon name="tick" />Chỉ đọc, tự hết hạn sau 2 giờ</li>
-                    <li><Icon name="tick" />Có hiệu lực khi 2 người duyệt ký</li>
+                    <li><Icon name="tick" />Only you can read it, only record {dialog.record.id}</li>
+                    <li><Icon name="tick" />Read only, expires after 2 h</li>
+                    <li><Icon name="tick" />Active once 2 approvers sign</li>
                   </>
                 )}
               </ul>
-              <button className="btn primary block" disabled={busy} onClick={submitDialog}>{dialog.mode === "break-glass" ? "Mở hồ sơ ngay" : "Gửi yêu cầu"}</button>
+              <button className="btn primary block" disabled={busy} onClick={submitDialog}>{dialog.mode === "break-glass" ? "Open record now" : "Send request"}</button>
             </section>
           )}
 
           <section aria-labelledby="records-h">
             <div className="title-row" style={{ marginBottom: 12, alignItems: "baseline" }}>
-              <h2 id="records-h" style={{ fontSize: 17, fontWeight: 600 }}>Hồ sơ chi tiết</h2>
-              <span className="stamp">Mỗi hồ sơ cần quyền đọc riêng</span>
+              <h2 id="records-h" style={{ fontSize: 17, fontWeight: 600 }}>Detailed records</h2>
+              <span className="stamp">Each record needs its own read grant</span>
             </div>
             <div className="cards">
               {records.map((r) => {
@@ -328,26 +330,26 @@ export default function EmergencyPage() {
                   <div key={r.id} className="panel rec">
                     <div className="top">
                       <IconTile name={r.tier === 3 ? "lock" : r.category === "medications" ? "pill" : "file"} tone={r.tier === 3 ? "grey" : r.category === "medications" ? "orange" : "green"} />
-                      {auth ? <span className="pill pos">Đọc được</span>
-                        : pending ? <span className="pill warn">Chờ duyệt</span>
+                      {auth ? <span className="pill pos">Readable</span>
+                        : pending ? <span className="pill warn">Pending approval</span>
                         : latest ? <span className="pill">{STATUS_TEXT[latest.status] ?? latest.status}</span>
-                        : r.tier === 3 ? <span className="pill">Hạn chế</span> : null}
+                        : r.tier === 3 ? <span className="pill">Restricted</span> : null}
                     </div>
                     <div>
                       <b style={{ fontWeight: 600, fontSize: 15 }}>{r.title}</b>
                       <span className="small muted" style={{ display: "block" }}>{r.id}</span>
                     </div>
                     <ul className="checks small">
-                      {r.tier === 2 ? <li><Icon name="tick" />Cần 2 người duyệt</li> : <li className="off"><Icon name="x" />Không mở khi cấp cứu</li>}
-                      {r.breakGlassEligible ? <li><Icon name="tick" />Bệnh nhân cho mở khẩn cấp</li> : <li className="off"><Icon name="x" />Không mở khẩn cấp</li>}
-                      {auth && <li><Icon name="clock" />Đến {fmtTime(auth.expiresAt)}</li>}
+                      {r.tier === 2 ? <li><Icon name="tick" />Needs 2 approvers</li> : <li className="off"><Icon name="x" />Not opened in emergencies</li>}
+                      {r.breakGlassEligible ? <li><Icon name="tick" />Patient allows break-glass</li> : <li className="off"><Icon name="x" />No break-glass</li>}
+                      {auth && <li><Icon name="clock" />Until {fmtTime(auth.expiresAt)}</li>}
                     </ul>
                     <div className="actions">
-                    {auth && <button className="btn primary block" onClick={() => openRecord(r, "request", auth.id)}>Đọc hồ sơ</button>}
-                    {r.tier === 2 && !auth && !pending && <button className="btn soft block" onClick={() => setDialog({ mode: "request", record: r })}>Xin quyền đọc</button>}
-                    {r.tier === 2 && pending && <button className="btn soft block" disabled>Đang chờ duyệt</button>}
-                    {r.tier === 2 && r.breakGlassEligible && erAttending && !auth && <button className="btn block" onClick={() => setDialog({ mode: "break-glass", record: r })}>Mở khẩn cấp</button>}
-                    {r.tier === 3 && <button className="btn soft block" disabled>Cần căn cứ pháp lý riêng</button>}
+                    {auth && <button className="btn primary block" onClick={() => openRecord(r, "request", auth.id)}>Read record</button>}
+                    {r.tier === 2 && !auth && !pending && <button className="btn soft block" onClick={() => setDialog({ mode: "request", record: r })}>Request access</button>}
+                    {r.tier === 2 && pending && <button className="btn soft block" disabled>Pending approval</button>}
+                    {r.tier === 2 && r.breakGlassEligible && erAttending && !auth && <button className="btn block" onClick={() => setDialog({ mode: "break-glass", record: r })}>Break glass</button>}
+                    {r.tier === 3 && <button className="btn soft block" disabled>Needs a separate legal basis</button>}
                     </div>
                   </div>
                 );
@@ -362,7 +364,7 @@ export default function EmergencyPage() {
                   <IconTile name="file" tone={o.text ? "green" : "grey"} round />
                   <div><span className="label">{id}</span><span className="value">{recordTitle(id)}</span></div>
                 </div>
-                <span className={`pill ${o.text ? "pos" : "neg"}`}>{o.text ? (o.via === "break-glass" ? "Mở khẩn cấp" : "Đã mở") : "Bị từ chối"}</span>
+                <span className={`pill ${o.text ? "pos" : "neg"}`}>{o.text ? (o.via === "break-glass" ? "Break-glass" : "Opened") : "Denied"}</span>
               </header>
               {o.text ? <pre className="record">{JSON.stringify(JSON.parse(o.text), null, 2)}</pre> : <p className="notice neg">{o.error}</p>}
             </section>
@@ -373,29 +375,30 @@ export default function EmergencyPage() {
           <section className="panel" aria-labelledby="qr-h">
             <div className="head" style={{ marginBottom: 14 }}>
               <IconTile name="patient" tone="teal" round />
-              <div><span className="label">Mã QR bệnh nhân:</span><span className="value" id="qr-h">Thẻ cấp cứu</span></div>
+              <div><span className="label">Patient QR code:</span><span className="value" id="qr-h">Emergency card</span></div>
             </div>
             <PatientQR publicId={view.patient.publicId} />
-            <div className="check-line"><i aria-hidden="true" /><span className="small">Mã chỉ dẫn tới hồ sơ, không chứa dữ liệu y tế hay khoá</span></div>
+            <div className="check-line"><i aria-hidden="true" /><span className="small">The code only links to the record; it holds no medical data or keys</span></div>
           </section>
 
           <section className="panel" aria-labelledby="facts-h">
-            <header><h2 id="facts-h">Thông tin nhanh</h2></header>
+            <header><h2 id="facts-h">Quick facts</h2></header>
             {tier1 ? (
               <dl className="kv">
                 {Object.entries(tier1.dataStatus).map(([k, v]) => (
                   <div key={k}><dt>{FIELD_TEXT[k] ?? k}:</dt><dd className={v === "no_data" ? "faint" : ""}><span className={`st${v === "clinician_verified" ? "" : " none"}`}>{VERIFY_TEXT[v] ?? v}</span></dd></div>
                 ))}
-                <div className="stacked"><dt>Người liên hệ:</dt><dd>{tier1.emergencyContact}</dd></div>
+                <div className="stacked"><dt>Emergency contact:</dt><dd>{tier1.emergencyContact}</dd></div>
               </dl>
             ) : <p className="muted">—</p>}
-            <p className="small faint" style={{ marginTop: 10 }}>Chưa có dữ liệu không có nghĩa là không có nguy cơ.</p>
+            <p className="small faint" style={{ marginTop: 10 }}>No data does not mean no risk.</p>
           </section>
 
           {requests.slice(0, 2).map((q) => (
             <section key={q.id} className="panel">
               <GrantCard doctor={q.doctorUsername} recordId={q.recordId} recordTitle={recordTitle(q.recordId)} expiresAt={q.expiresAt} issuedAt={q.createdAt} signed={q.status === "AUTHORIZED" ? 2 : 0} needed={2} status={q.status} />
               {q.statusReason && <p className="small err" style={{ marginTop: 8 }}>{q.statusReason}</p>}
+              {q.clarifications?.map((c, i) => <p key={i} className="notice small" style={{ marginTop: 8 }}>{displayName(c.by)} asked ({fmtTime(c.at)}): {c.text}</p>)}
             </section>
           ))}
         </div>

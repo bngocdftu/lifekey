@@ -66,7 +66,7 @@ export function PatientQR({ publicId }: { publicId: string }) {
   }, [publicId]);
   return (
     <div className="qr">
-      <span role="img" aria-label={`Mã QR của bệnh nhân, mã ${publicId}`} dangerouslySetInnerHTML={{ __html: svg }} style={{ width: 128, height: 128, display: "block" }} />
+      <span role="img" aria-label={`Patient QR code, ID ${publicId}`} dangerouslySetInnerHTML={{ __html: svg }} style={{ width: 128, height: 128, display: "block" }} />
       <span>{publicId}</span>
     </div>
   );

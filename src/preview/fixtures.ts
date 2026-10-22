@@ -16,35 +16,39 @@ const KEYS: Record<string, string> = {
 
 const state = {
   requests: [
-    { id: "REQ-1042", patientId: PATIENT.id, recordId: "MED-204", alertId: "ALERT-88", doctorUsername: "doctor-a", doctorKey: KEYS["doctor-a"], reason: "Đánh giá nguy cơ chảy máu trước khi khâu vết thương", createdAt: T0 - 1500, expiresAt: T0 + 5700, status: "AUTHORIZED", digest: "4be1f0c27a9d3e65b8f1", policyName: "lk-emergency-jit-MED-204-user-read-REQ-1042", changeRequestId: "cr-1042" },
-    { id: "REQ-1043", patientId: PATIENT.id, recordId: "MED-205", doctorUsername: "doctor-a", doctorKey: KEYS["doctor-a"], reason: "Kiểm tra loại van tim trước khi chụp cộng hưởng từ", createdAt: T0 - 420, expiresAt: T0 + 6780, status: "PENDING_APPROVAL", digest: "9c02d7e1b54fa83e6d10", policyName: "lk-emergency-jit-MED-205-user-read-REQ-1043", changeRequestId: "cr-1043" },
+    { id: "REQ-1042", patientId: PATIENT.id, recordId: "MED-204", alertId: "ALERT-88", doctorUsername: "doctor-a", doctorKey: KEYS["doctor-a"], reason: "Assess bleeding risk before suturing the wound", createdAt: T0 - 1500, expiresAt: T0 + 5700, status: "AUTHORIZED", digest: "4be1f0c27a9d3e65b8f1", policyName: "lk-emergency-jit-MED-204-user-read-REQ-1042", changeRequestId: "cr-1042" },
+    { id: "REQ-1043", patientId: PATIENT.id, recordId: "MED-205", doctorUsername: "doctor-a", doctorKey: KEYS["doctor-a"], reason: "Check the heart valve type before an MRI scan", createdAt: T0 - 420, expiresAt: T0 + 6780, status: "PENDING_APPROVAL", digest: "9c02d7e1b54fa83e6d10", policyName: "lk-emergency-jit-MED-205-user-read-REQ-1043", changeRequestId: "cr-1043",
+      clarifications: [{ by: "doctor-b", text: "Is there a chest X-ray yet to identify the valve type?", at: T0 - 240 }] },
+    { id: "REQ-1044", purpose: "patient-self", patientId: PATIENT.id, recordId: "T1-PAT-001", doctorUsername: "patient-alice", doctorKey: KEYS["patient-alice"], reason: "I want to review my emergency summary", createdAt: T0 - 180, expiresAt: T0 + 7020, status: "PENDING_APPROVAL", digest: "1f7a03c9e2b84d65a0c3", policyName: "lk-patient-self-T1-PAT-001-user-read-REQ-1044", changeRequestId: "cr-1044", clarifications: [] },
   ] as Record<string, any>[],
   breakGlass: [
-    { id: "BG-1", patientId: PATIENT.id, recordId: "MED-204", doctorUsername: "doctor-a", doctorKey: KEYS["doctor-a"], reason: "Bệnh nhân bất tỉnh, đang chảy máu, cần biết thuốc chống đông", declaredAt: T0 - 5 * 3600, reviewDueAt: T0 + 67 * 3600, notified: ["patient", "emergency-contact", "on-call-approvers", "privacy-officer"], reviews: [{ reviewer: "doctor-c", decision: "justified", note: "Có ghi nhận chảy máu trong bệnh án lúc 03:10", at: T0 - 3600 }], status: "AWAITING_REVIEW" },
+    { id: "BG-1", patientId: PATIENT.id, recordId: "MED-204", doctorUsername: "doctor-a", doctorKey: KEYS["doctor-a"], reason: "Patient unconscious and bleeding; need to know the anticoagulant", declaredAt: T0 - 5 * 3600, reviewDueAt: T0 + 67 * 3600, notified: ["patient", "emergency-contact", "on-call-approvers", "privacy-officer"], reviews: [{ reviewer: "doctor-c", decision: "justified", note: "Bleeding documented in the chart at 03:10", at: T0 - 3600 }], status: "AWAITING_REVIEW" },
   ] as Record<string, any>[],
   signers: { "cr-1043": ["doctor-b"] } as Record<string, string[]>,
   consent: {
     patientId: PATIENT.id, version: 1, signedBy: "patient-alice", signedAt: T0 - 27000, breakGlass: ["MED-204"],
-    tier0: { bloodType: "O+", allergies: "Penicillin (sốc phản vệ)", implants: "Van tim cơ học", emergencyContact: "Bob Nguyen (giả lập), 0900 000 000" },
+    tier0: { bloodType: "O+", allergies: "Penicillin (anaphylaxis)", implants: "Mechanical heart valve", emergencyContact: "Bob Nguyen (synthetic), 0900 000 000" },
   } as PatientConsent | null,
   audit: [] as Record<string, any>[],
 };
 
 const AUDIT_SEED: [number, string, string, string, string, string?][] = [
-  [-27000, "patient-alice", "consent.sign", "PAT-001", "ok", "v1: mở khẩn cấp MED-204; thẻ khẩn cấp: bloodType, allergies, implants, emergencyContact"],
-  [-26000, "admin", "grant.file", "T1-PAT-001", "ok", "Bác sĩ đã xác minh xem cảnh báo cấp cứu"],
-  [-25000, "lifekey-server", "grant.signed", "T1-PAT-001", "ok", "Đủ 2 chữ ký"],
-  [-24800, "admin", "record.write", "MED-204", "ok", "3.412 ký tự mã hoá"],
+  [-27000, "patient-alice", "consent.sign", "PAT-001", "ok", "v1: break-glass MED-204; emergency card: bloodType, allergies, implants, emergencyContact"],
+  [-26000, "admin", "grant.file", "T1-PAT-001", "ok", "Verified clinicians view emergency alerts"],
+  [-25000, "lifekey-server", "grant.signed", "T1-PAT-001", "ok", "2 signatures collected"],
+  [-24800, "admin", "record.write", "MED-204", "ok", "3,412 characters of ciphertext"],
   [-18060, "doctor-a", "patient.lookup", "PAT-001", "ok", "via QR public id"],
-  [-18000, "doctor-a", "break-glass.declare", "MED-204", "ok", "Bệnh nhân bất tỉnh, đang chảy máu"],
-  [-17990, "doctor-a", "record.decrypt", "MED-204", "ok", "client-reported: mở khẩn cấp"],
-  [-3600, "doctor-c", "break-glass.review", "MED-204", "ok", "Hợp lý"],
+  [-18000, "doctor-a", "break-glass.declare", "MED-204", "ok", "Patient unconscious and bleeding"],
+  [-17990, "doctor-a", "record.decrypt", "MED-204", "ok", "client-reported: break-glass"],
+  [-3600, "doctor-c", "break-glass.review", "MED-204", "ok", "Justified"],
   [-1500, "doctor-a", "request.create", "MED-204", "ok", "REQ-1042"],
-  [-1200, "lifekey-server", "request.status", "MED-204", "ok", "REQ-1042 đã đủ 2 chữ ký"],
-  [-1100, "doctor-a", "record.decrypt", "MED-204", "ok", "client-reported: theo REQ-1042"],
-  [-900, "patient-alice", "record.decrypt", "MED-204", "denied", "client-reported: subjectId does not match."],
+  [-1200, "lifekey-server", "request.status", "MED-204", "ok", "REQ-1042 has 2 signatures"],
+  [-1100, "doctor-a", "record.decrypt", "MED-204", "ok", "client-reported: under REQ-1042"],
+  [-900, "doctor-b", "record.decrypt", "MED-204", "denied", "client-reported: subjectId does not match."],
   [-420, "doctor-a", "request.create", "MED-205", "ok", "REQ-1043"],
-  [-300, "lifekey-server", "proof.server-approve", "cr-1043", "denied", "Chữ ký 1 → 1"],
+  [-300, "lifekey-server", "proof.server-approve", "cr-1043", "denied", "Signatures 1 → 1"],
+  [-240, "doctor-b", "request.clarify", "MED-205", "info", "REQ-1043: Is there a chest X-ray yet to identify the valve type?"],
+  [-180, "patient-alice", "request.create", "T1-PAT-001", "ok", "REQ-1044 patient asked to view"],
 ];
 AUDIT_SEED.forEach(([dt, actor, action, resource, outcome, detail], i) =>
   state.audit.push({ seq: i + 1, at: T0 + dt, actor, action, resource, outcome, detail, prevHash: "", hash: "" }),
@@ -114,10 +118,10 @@ export async function previewFetch(user: string, info: { roles: string[]; approv
   if (p === "/api/approvals") {
     if (!info.approver) return json({ error: "approvers only" }, 403);
     const items = state.requests.filter((r) => r.status === "PENDING_APPROVAL").map((r) => ({
-      policyName: r.policyName, changeRequestId: r.changeRequestId, kind: "emergency-jit", recordId: r.recordId,
+      policyName: r.policyName, changeRequestId: r.changeRequestId, kind: r.purpose === "patient-self" ? "patient-self" : "emergency-jit", recordId: r.recordId,
       recordTitle: RECORDS.find((x) => x.id === r.recordId)?.title, tier: 2, subject: { type: "User", username: r.doctorUsername },
       roles: ["_tide_decryptor"], expiry: r.expiresAt,
-      request: { id: r.id, reason: r.reason, alertId: r.alertId, doctorUsername: r.doctorUsername, createdAt: r.createdAt, digest: r.digest },
+      request: { id: r.id, purpose: r.purpose ?? "clinical", reason: r.reason, alertId: r.alertId, doctorUsername: r.doctorUsername, createdAt: r.createdAt, digest: r.digest, clarifications: r.clarifications ?? [] },
       blockedReason: r.doctorUsername === user ? "the requesting doctor cannot approve their own request" : null,
       changeRequest: { status: "PENDING", authorizationCount: (state.signers[r.changeRequestId] ?? []).length, threshold: 2, authorizers: (state.signers[r.changeRequestId] ?? []).map((u) => ({ username: u })) },
     }));
@@ -163,14 +167,38 @@ export async function previewFetch(user: string, info: { roles: string[]; approv
     return json({ consent: r.consent, added, removed, stillSigned: removed.filter((id) => id === "MED-204") }, 201);
   }
 
+  if (p === "/api/my-record/requests" && method === "POST") {
+    if (!info.roles.includes("lifekey-patient")) return json({ error: "patients only" }, 403);
+    if (String(body.reason ?? "").trim().length < 10) return json({ errors: ["give a reason (at least 10 characters)"] }, 400);
+    const id = `REQ-${1042 + state.requests.length}`;
+    const r = { id, purpose: "patient-self", patientId: PATIENT.id, recordId: body.recordId, doctorUsername: user, doctorKey: KEYS[user], reason: body.reason, createdAt: now(), expiresAt: now() + 7200, status: "PENDING_APPROVAL", digest: "preview", policyName: id, changeRequestId: `cr-${id}`, clarifications: [] };
+    state.requests.unshift(r);
+    return json({ request: r }, 201);
+  }
+  if (p === "/api/my-record/objections" && method === "POST") {
+    const e = state.breakGlass.find((x) => x.id === body.eventId);
+    if (!e) return json({ error: "no such event" }, 400);
+    if (e.patientObjection) return json({ error: "you already objected to this opening" }, 400);
+    e.patientObjection = { note: String(body.note ?? ""), at: now() };
+    return json({ event: e }, 201);
+  }
+  if (p.startsWith("/api/emergency-requests/") && p.endsWith("/clarify")) {
+    if (!info.approver) return json({ error: "approvers only" }, 403);
+    const r = state.requests.find((x) => x.id === p.split("/").at(-2));
+    if (!r) return json({ error: "no such request" }, 400);
+    r.clarifications = [...(r.clarifications ?? []), { by: user, text: String(body.text ?? ""), at: now() }];
+    return json({ request: r }, 201);
+  }
+  if (p === "/api/demo-seed") return json(method === "POST" ? { error: "the preview already has sample data" } : { enabled: false }, method === "POST" ? 403 : 200);
+
   if (p === "/api/my-record") {
     if (!info.roles.includes("lifekey-patient")) return json({ error: "patients only" }, 403);
     const ids = new Set([...RECORDS.map((r) => r.id), PATIENT.id]);
     return json({
       patient: PATIENT,
       consent: state.consent,
-      records: consented().map((r) => ({ ...r, stored: true })),
-      requests: state.requests.map(({ id, recordId, doctorUsername, reason, createdAt, expiresAt, status }) => ({ id, recordId, doctorUsername, reason, createdAt, expiresAt, status })),
+      records: consented().map((r) => ({ ...r, stored: true, ciphertext: `preview:${r.id}` })),
+      requests: state.requests.map(({ id, purpose, recordId, doctorUsername, reason, createdAt, expiresAt, status, clarifications }) => ({ id, purpose: purpose ?? "clinical", recordId, doctorUsername, reason, createdAt, expiresAt, status, clarifications: clarifications ?? [] })),
       breakGlass: state.breakGlass.map((e) => ({ ...e, overdue: now() > e.reviewDueAt })),
       standing: grants().map((g) => ({ name: g.name, kind: g.spec.kind, recordId: g.spec.recordId, subject: g.spec.subject.id, access: g.spec.access, expiry: g.spec.expiry, status: "SIGNED" })),
       audit: [...state.audit].reverse().filter((e) => ids.has(e.resource)),
@@ -178,6 +206,7 @@ export async function previewFetch(user: string, info: { roles: string[]; approv
   }
 
   if (p === "/api/proof") {
+    if (info.roles.includes("lifekey-patient")) return json({ error: "staff only" }, 403);
     if (method === "POST") return json({ attempt: { status: 200, body: { mode: "needs-approval" } }, before: 1, after: 1, recorded: false });
     return json({
       policies: [

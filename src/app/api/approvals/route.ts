@@ -30,7 +30,7 @@ export const GET = withAuth(async (_req, jwt) => {
         subject: p.spec.subject.type === "User" ? { type: "User", username: request?.doctorUsername ?? "?" } : p.spec.subject,
         roles: rolesFor(p.spec.access),
         expiry: p.spec.expiry,
-        request: request && { id: request.id, reason: request.reason, alertId: request.alertId, doctorUsername: request.doctorUsername, createdAt: request.createdAt, digest: request.digest },
+        request: request && { id: request.id, purpose: request.purpose ?? "clinical", reason: request.reason, alertId: request.alertId, doctorUsername: request.doctorUsername, createdAt: request.createdAt, digest: request.digest, clarifications: request.clarifications ?? [] },
         blockedReason: request ? canApprove(request, caller.username) : null,
         changeRequest: cr && { status: cr.status, authorizationCount: cr.authorizationCount, threshold: cr.threshold, readyToCommit: cr.readyToCommit, authorizers: cr.authorizers },
       });

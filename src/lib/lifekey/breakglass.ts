@@ -38,6 +38,8 @@ export interface BreakGlassEvent {
   notified: string[];
   reviews: BreakGlassReview[];
   status: BreakGlassStatus;
+  /** The patient says this opening was not needed. Reviewers see it; it does not decide for them. */
+  patientObjection?: { note: string; at: number };
 }
 
 export interface DeclareInput {
@@ -106,6 +108,14 @@ export function reviewBreakGlass(
   if (reviews.some((r) => r.decision === "not_justified")) status = "FLAGGED";
   else if (new Set(reviews.map((r) => r.reviewer)).size >= REVIEWERS_REQUIRED) status = "JUSTIFIED";
   return { event: { ...event, reviews, status } };
+}
+
+export function objectToBreakGlass(event: BreakGlassEvent, patientId: string, note: string, now: number): { event: BreakGlassEvent } | { error: string } {
+  if (event.patientId !== patientId) return { error: "only the patient whose record was opened can object" };
+  if (event.patientObjection) return { error: "you already objected to this opening" };
+  const n = note.trim();
+  if (n.length < 5) return { error: "say why (at least 5 characters)" };
+  return { event: { ...event, patientObjection: { note: n.slice(0, 500), at: now } } };
 }
 
 export function isOverdue(event: BreakGlassEvent, now: number): boolean {

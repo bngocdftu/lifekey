@@ -275,6 +275,7 @@ pre.record { margin: 0; padding: 14px 16px; border-radius: var(--radius-inner); 
 .cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--gap); align-items: stretch; }
 .rec { display: flex; flex-direction: column; gap: 14px; }
 .rec .actions { margin-top: auto; display: grid; gap: 8px; }
+.rec .actions .btn { white-space: normal; height: auto; min-height: 40px; padding-block: 9px; text-align: center; line-height: 20px; }
 .rec .top { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
 
 /* charts: segmented bar, situation matrix, time left */
@@ -333,7 +334,7 @@ pre.record { margin: 0; padding: 14px 16px; border-radius: var(--radius-inner); 
 
 .barlist { display: grid; gap: 10px; }
 .barlist li { display: grid; grid-template-columns: minmax(84px, 32%) minmax(0, 1fr) 44px; align-items: center; gap: 10px; font-size: var(--fs-small); }
-.barlist .bl-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.barlist .bl-label { min-width: 0; overflow-wrap: anywhere; line-height: 17px; }
 .barlist .bl-track { height: 10px; border-radius: 5px; background: var(--well); overflow: hidden; }
 .barlist .bl-track span { display: block; height: 100%; min-width: 4px; border-radius: 0 5px 5px 0; }
 .barlist .bl-val { text-align: right; font-weight: 600; }

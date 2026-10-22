@@ -21,7 +21,7 @@ export function GrantCard(props: {
   verb?: string;
   person?: boolean;
 }) {
-  const { doctor, recordId, recordTitle, expiresAt, issuedAt, signed, needed, signers = [], status, verb = "Quyền đọc", person = true } = props;
+  const { doctor, recordId, recordTitle, expiresAt, issuedAt, signed, needed, signers = [], status, verb = "Read grant", person = true } = props;
   const left = expiresAt ? expiresAt - Math.floor(Date.now() / 1000) : undefined;
   return (
     <div className="grant">
@@ -37,20 +37,20 @@ export function GrantCard(props: {
       </div>
       <dl className="kv">
         <div>
-          <dt>Người được dùng:</dt>
+          <dt>Granted to:</dt>
           <dd style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
             {person && <span className="avatar" style={{ ...personTint(doctor), width: 24, height: 24, fontSize: 11 }}>{initials(doctor)}</span>}
             {displayName(doctor)}
           </dd>
         </div>
-        <div><dt>Hồ sơ:</dt><dd className="mono">{recordId}</dd></div>
-        <div><dt>Hết hạn:</dt><dd className="num">{expiresAt ? (left !== undefined && left > 0 ? fmtTime(expiresAt) : "Đã hết hạn") : "—"}</dd></div>
+        <div><dt>Record:</dt><dd className="mono">{recordId}</dd></div>
+        <div><dt>Expires:</dt><dd className="num">{expiresAt ? (left !== undefined && left > 0 ? fmtTime(expiresAt) : "Expired") : "—"}</dd></div>
       </dl>
       {status === "AUTHORIZED" && issuedAt && expiresAt && <TimeLeft issuedAt={issuedAt} expiresAt={expiresAt} />}
       <div className="inset ring-wrap">
         <Ring value={signed} total={needed} icon="shield" />
         <div>
-          <span className="label">Chữ ký duyệt</span>
+          <span className="label">Approval signatures</span>
           <span className="value">{signed}/{needed}</span>
           {signers.length > 0 && <span className="small muted">{signers.map(displayName).join(", ")}</span>}
         </div>
@@ -60,10 +60,10 @@ export function GrantCard(props: {
 }
 
 export const STATUS_TEXT: Record<string, string> = {
-  PENDING_APPROVAL: "Chờ duyệt",
-  AUTHORIZED: "Đã duyệt",
-  DENIED: "Bị từ chối",
-  EXPIRED: "Hết hạn",
-  REVOKED: "Đã thu hồi",
-  FAILED_VALIDATION: "Không khớp",
+  PENDING_APPROVAL: "Pending approval",
+  AUTHORIZED: "Approved",
+  DENIED: "Denied",
+  EXPIRED: "Expired",
+  REVOKED: "Revoked",
+  FAILED_VALIDATION: "Failed validation",
 };

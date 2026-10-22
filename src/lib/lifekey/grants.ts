@@ -26,7 +26,9 @@ export type GrantKind =
   /** ER attendings may read a record the patient made break-glass eligible. Pre-approved. */
   | "break-glass-standing"
   /** One named doctor may read one record until the expiry. Approved by the quorum per request. */
-  | "emergency-jit";
+  | "emergency-jit"
+  /** The patient may read one of their own records until the expiry. Approved by the quorum per request. */
+  | "patient-self";
 
 export type Subject = { type: "User"; id: string } | { type: "Role"; id: string };
 
@@ -102,6 +104,14 @@ export function validateGrant(spec: GrantSpec, now: number, records: RecordMeta[
       if (spec.access !== "read") errors.push("an emergency request is read-only");
       if (spec.subject.type !== "User") errors.push("an emergency request names one doctor");
       if (!spec.expiry) errors.push("an emergency request needs an expiry");
+      else if (spec.expiry <= now) errors.push("expiry is in the past");
+      else if (spec.expiry - now > MAX_JIT_SECONDS) errors.push(`expiry is more than ${MAX_JIT_SECONDS / 3600}h away`);
+      break;
+    case "patient-self":
+      // Any tier: it is the patient's own data. Which patient is checked where the request is made.
+      if (spec.access !== "read") errors.push("a patient request is read-only");
+      if (spec.subject.type !== "User") errors.push("a patient request names the patient");
+      if (!spec.expiry) errors.push("a patient request needs an expiry");
       else if (spec.expiry <= now) errors.push("expiry is in the past");
       else if (spec.expiry - now > MAX_JIT_SECONDS) errors.push(`expiry is more than ${MAX_JIT_SECONDS / 3600}h away`);
       break;

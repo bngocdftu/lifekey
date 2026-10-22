@@ -37,7 +37,7 @@
       },
       {
         "name": "lifekey-patient",
-        "description": "LifeKey: a patient. Signs their own consent and sees who opened their records. Never a policy subject, so the decrypt capability opens nothing for them."
+        "description": "LifeKey: a patient. Signs their own consent, sees who opened their records, and may ask to read one of their own records (a per-request policy naming their key, signed by the quorum)."
       },
       {
         "name": "_tide_x.selfencrypt",

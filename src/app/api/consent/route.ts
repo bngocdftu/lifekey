@@ -25,10 +25,10 @@ export const POST = withAuth(async (req, jwt) => {
       action: "consent.sign",
       resource: patientId,
       outcome: "ok",
-      detail: `v${r.consent.version}: mở khẩn cấp ${r.consent.breakGlass.join(", ") || "không hồ sơ nào"}`
-        + (added.length ? `; thêm ${added.join(", ")}` : "")
-        + (removed.length ? `; rút ${removed.join(", ")}` : "")
-        + `; thẻ khẩn cấp: ${Object.keys(r.consent.tier0).join(", ") || "trống"}`,
+      detail: `v${r.consent.version}: break-glass ${r.consent.breakGlass.join(", ") || "no records"}`
+        + (added.length ? `; added ${added.join(", ")}` : "")
+        + (removed.length ? `; withdrew ${removed.join(", ")}` : "")
+        + `; emergency card: ${Object.keys(r.consent.tier0).join(", ") || "empty"}`,
     });
     // A grant already signed for a withdrawn record stays valid on the network until it expires.
     const stillSigned = removed.filter((id) => Object.values(s.policies).some((p) => p.spec.kind === "break-glass-standing" && p.spec.recordId === id && p.status === "SIGNED"));

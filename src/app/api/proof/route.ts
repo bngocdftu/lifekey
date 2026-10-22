@@ -1,12 +1,16 @@
 import { withAuth } from "@/lib/auth/protect";
 import { callerFrom, json } from "@/lib/auth/caller";
+import { ROLE_PATIENT } from "@/lib/lifekey/grants.ts";
 import { audit, readStore, withStore } from "@/lib/lifekey/store.ts";
+
+const STAFF_ONLY = { error: "staff only: the proof page is for hospital staff and reviewers" };
 import { getChangeRequest, tryServerSideApprove } from "@/lib/tide/igaServer";
 
 // PROOF ONLY. Hands every signed policy to any signed-in user, on purpose: the claim under test is
 // that a policy is not a secret, because the network only honours it for the subject it names.
 // A production LifeKey would not expose this.
-export const GET = withAuth(async () => {
+export const GET = withAuth(async (_req, jwt) => {
+  if (callerFrom(jwt).realmRoles.includes(ROLE_PATIENT)) return json(STAFF_ONLY, 403);
   const s = readStore();
   return json({
     policies: Object.values(s.policies)
@@ -21,6 +25,7 @@ export const GET = withAuth(async () => {
 // The server holds master-admin credentials. Show that they cannot stand in for an approver.
 export const POST = withAuth(async (req, jwt) => {
   const caller = callerFrom(jwt);
+  if (caller.realmRoles.includes(ROLE_PATIENT)) return json(STAFF_ONLY, 403);
   const { changeRequestId } = await req.json();
   if (typeof changeRequestId !== "string") return json({ error: "changeRequestId required" }, 400);
   const before = await fetchCount(changeRequestId);

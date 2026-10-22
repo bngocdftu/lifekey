@@ -10,7 +10,7 @@
 
 **The prototype and TideCloak's role.** Every record is encrypted on its own. A read grant is a TideCloak policy (`RelationshipAttestation:1`) naming one doctor's Tide key, one record and an expiry; it exists only once two approvers sign it through TideCloak's quorum, and the Tide network checks doctor, record, operation and expiry on every decryption. Emergency summaries are pre-approved for verified clinicians; break-glass opens only records the patient pre-authorised, for on-duty ER doctors, with review afterwards.
 
-**Why ordinary login is not enough.** With normal login our server would hold the keys and decide who reads what. Here it stores only ciphertext and cannot sign a grant: a leaked grant fails for anyone else, a MED-204 grant cannot open MED-205, and the server cannot approve for anyone.
+**Why ordinary login is not enough.** With normal login our server would hold the keys and decide who reads what. Here it stores only ciphertext and cannot sign a grant: a leaked grant fails for anyone else (even the approver who signed it), a MED-204 grant cannot open MED-205, and the server cannot approve for anyone.
 
 **What changes.** Patients let emergency teams see what matters without exposing everything, and hospitals can show that no single admin, server or AI can open a record alone.
 
@@ -69,3 +69,4 @@ Tests for LifeKey's own rules: `npm test`.
 | Approving from the approver's browser | `src/lib/client/approve.ts` |
 | Live checks against the Tide network | `src/app/proof/page.tsx` |
 | Phone screenshots | `docs/screenshots/phone/` |
+| Desktop screenshots | `docs/screenshots/web/` |

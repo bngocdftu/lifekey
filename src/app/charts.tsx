@@ -43,11 +43,11 @@ export interface MatrixRow {
 }
 
 const SITUATIONS: { key: string; label: string }[] = [
-  { key: "trauma", label: "Chấn thương" },
-  { key: "surgery", label: "Phẫu thuật" },
-  { key: "bleeding", label: "Chảy máu" },
-  { key: "imaging", label: "Chụp chiếu" },
-  { key: "sedation", label: "An thần" },
+  { key: "trauma", label: "Trauma" },
+  { key: "surgery", label: "Surgery" },
+  { key: "bleeding", label: "Bleeding" },
+  { key: "imaging", label: "Imaging" },
+  { key: "sedation", label: "Sedation" },
 ];
 
 /** Which alert matters in which situation. A tag of "all" fills the whole row. */
@@ -60,7 +60,7 @@ export function SituationMatrix({ rows }: { rows: MatrixRow[] }) {
       <table className="matrix">
         <thead>
           <tr>
-            <th scope="col">Cảnh báo</th>
+            <th scope="col">Alert</th>
             {SITUATIONS.map((s) => <th key={s.key} scope="col">{s.label}</th>)}
           </tr>
         </thead>
@@ -71,7 +71,7 @@ export function SituationMatrix({ rows }: { rows: MatrixRow[] }) {
               {SITUATIONS.map((s) => (
                 <td key={s.key}>
                   {hits(r, s.key)
-                    ? <span className="cell on" style={{ ["--c" as string]: r.color }} title={`${r.label}: cần xem khi ${s.label.toLowerCase()}`}><span className="sr-only">Có</span></span>
+                    ? <span className="cell on" style={{ ["--c" as string]: r.color }} title={`${r.label}: check before ${s.label.toLowerCase()}`}><span className="sr-only">Yes</span></span>
                     : <span className="cell" aria-hidden="true" />}
                 </td>
               ))}
@@ -80,7 +80,7 @@ export function SituationMatrix({ rows }: { rows: MatrixRow[] }) {
         </tbody>
         <tfoot>
           <tr>
-            <th scope="row">Số cảnh báo cần xem</th>
+            <th scope="row">Alerts to check</th>
             {totals.map((t, i) => (
               <td key={SITUATIONS[i].key}>
                 <span className={`count${t === top ? " top" : ""}`}>{t}</span>
@@ -103,10 +103,10 @@ export function TimeLeft({ issuedAt, expiresAt }: { issuedAt: number; expiresAt:
   return (
     <div className="timeleft">
       <div className="tl-text">
-        <span className="label">Thời gian còn lại</span>
-        <span className="num"><b>{left ? `${mins(left)} phút` : "Đã hết hạn"}</b><span className="faint"> / {mins(total)} phút</span></span>
+        <span className="label">Time left</span>
+        <span className="num"><b>{left ? `${mins(left)} min` : "Expired"}</b><span className="faint"> / {mins(total)} min</span></span>
       </div>
-      <div className="tl-bar" role="progressbar" aria-label="Thời gian còn lại của quyền đọc" aria-valuemin={0} aria-valuemax={mins(total)} aria-valuenow={mins(left)}>
+      <div className="tl-bar" role="progressbar" aria-label="Time left on the read grant" aria-valuemin={0} aria-valuemax={mins(total)} aria-valuenow={mins(left)}>
         <span className={ratio < 0.25 ? "low" : undefined} style={{ width: `${ratio * 100}%` }} />
       </div>
     </div>
@@ -129,7 +129,7 @@ export function Donut({ parts, center, sub, size = 132, label }: { parts: Seg[];
   return (
     <div className="donut">
       <div className="donut-fig" style={{ width: size, height: size }}>
-        <svg viewBox={`0 0 ${size} ${size}`} width={size} height={size} role="img" aria-label={`${label}: ${shown.map((p) => `${p.label} ${p.value}`).join(", ") || "chưa có dữ liệu"}`}>
+        <svg viewBox={`0 0 ${size} ${size}`} width={size} height={size} role="img" aria-label={`${label}: ${shown.map((p) => `${p.label} ${p.value}`).join(", ") || "no data"}`}>
           <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--well)" strokeWidth={stroke} />
           {total > 0 && shown.map((p) => {
             const len = (p.value / total) * c;
@@ -158,10 +158,10 @@ export function BarList({ rows, unit = "" }: { rows: { key: string; label: React
   return (
     <ul className="barlist">
       {rows.map((r) => (
-        <li key={r.key} title={`${r.note ?? ""}${r.note ? ": " : ""}${r.value.toLocaleString("vi-VN")}${unit}`}>
+        <li key={r.key} title={`${r.note ?? ""}${r.note ? ": " : ""}${r.value.toLocaleString("en-GB")}${unit}`}>
           <span className="bl-label">{r.label}</span>
           <span className="bl-track"><span style={{ width: `${(r.value / max) * 100}%`, background: r.color ?? "var(--accent)" }} /></span>
-          <span className="bl-val num">{r.value.toLocaleString("vi-VN")}{unit}</span>
+          <span className="bl-val num">{r.value.toLocaleString("en-GB")}{unit}</span>
         </li>
       ))}
     </ul>
@@ -197,8 +197,8 @@ export function timeBuckets(entries: { at: number; outcome: string }[]): Bucket[
     const bad = inside.filter((e) => e.outcome === "denied" || e.outcome === "error").length;
     const ok = inside.length - bad;
     return {
-      label: new Date(from * 1000).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
-      tip: `${fmtTime(from)}: ${ok} thành công, ${bad} bị từ chối`,
+      label: new Date(from * 1000).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }),
+      tip: `${fmtTime(from)}: ${ok} succeeded, ${bad} denied`,
       values: [{ key: "ok", value: ok, color: "var(--positive)" }, { key: "bad", value: bad, color: "var(--negative)" }],
     };
   });
@@ -259,7 +259,7 @@ export function AreaChart({ points, labels, label, height = 120 }: { points: num
       <path d={line} fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinejoin="round" />
       {points.map((p, i) => (
         <rect key={i} x={x(i) - (W - L - R) / points.length / 2} y={T} width={(W - L - R) / points.length} height={height - B - T} fill="transparent">
-          <title>{`${labels[i]}: ${p} việc`}</title>
+          <title>{`${labels[i]}: ${p} events`}</title>
         </rect>
       ))}
       <circle cx={x(last)} cy={y(points[last] ?? 0)} r="4.5" fill="var(--accent)" stroke="var(--surface)" strokeWidth="2" />
@@ -281,8 +281,8 @@ export function Timeline({ start, end, now, marks, label }: {
   return (
     <svg className="chart-svg" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={label}>
       <rect x={L} y={barY} width={W - L - R} height={8} rx={4} fill="var(--well)" />
-      {now !== undefined && <rect x={L} y={barY} width={Math.max(0, x(now) - L)} height={8} rx={4} fill="var(--warning)" opacity="0.85"><title>Đã trôi qua</title></rect>}
-      {now !== undefined && <text x={x(now)} y={barY - 8} textAnchor={x(now) > W - 80 ? "end" : "middle"} className="ink">Bây giờ</text>}
+      {now !== undefined && <rect x={L} y={barY} width={Math.max(0, x(now) - L)} height={8} rx={4} fill="var(--warning)" opacity="0.85"><title>Elapsed</title></rect>}
+      {now !== undefined && <text x={x(now)} y={barY - 8} textAnchor={x(now) > W - 80 ? "end" : "middle"} className="ink">Now</text>}
       {sorted.map((m, i) => {
         const row = rows - 1 - i, ty = barY + 30 + row * 22, mx = x(m.at), right = mx > W * 0.62;
         return (
@@ -331,7 +331,7 @@ export function DotMatrix({ rows, cols, cell }: {
 /** The audit log as linked blocks: each block carries the hash of the one before it. */
 export function HashChain({ items, brokenAt }: { items: { seq: number; hash: string; ok: boolean; tip: string }[]; brokenAt: number | null }) {
   return (
-    <ol className="chain" aria-label="Chuỗi kiểm tra của nhật ký">
+    <ol className="chain" aria-label="Access log hash chain">
       {items.map((it) => {
         const broken = brokenAt !== null && it.seq >= brokenAt;
         return (

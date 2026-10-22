@@ -6,6 +6,7 @@ import { patientForAccount } from "@/lib/lifekey/consent.ts";
 import { isOverdue } from "@/lib/lifekey/breakglass.ts";
 import { effectiveStatus } from "@/lib/lifekey/requests.ts";
 import { consentedRecords, nowSeconds, withStore } from "@/lib/lifekey/store.ts";
+// Ciphertext is not a secret here either: it opens only with a policy naming the patient's key.
 import { refreshRequests } from "@/lib/lifekey/sync.ts";
 
 // The patient's own view: their consent, who asked for or opened which record, and what grants
@@ -23,10 +24,10 @@ export const GET = withAuth(async (_req, jwt) => {
       return {
         patient: PATIENT,
         consent: s.consents[patientId] ?? null,
-        records: records.map((r) => ({ ...r, stored: !!s.ciphertexts[r.id] })),
+        records: records.map((r) => ({ ...r, stored: !!s.ciphertexts[r.id], ciphertext: s.ciphertexts[r.id]?.ciphertext ?? null })),
         requests: Object.values(s.requests)
           .filter((r) => r.patientId === patientId)
-          .map((r) => ({ id: r.id, recordId: r.recordId, doctorUsername: r.doctorUsername, reason: r.reason, createdAt: r.createdAt, expiresAt: r.expiresAt, status: effectiveStatus(r, now) }))
+          .map((r) => ({ id: r.id, purpose: r.purpose ?? "clinical", recordId: r.recordId, doctorUsername: r.doctorUsername, reason: r.reason, createdAt: r.createdAt, expiresAt: r.expiresAt, status: effectiveStatus(r, now), clarifications: r.clarifications ?? [] }))
           .sort((a, b) => b.createdAt - a.createdAt),
         breakGlass: Object.values(s.breakGlass)
           .filter((e) => e.patientId === patientId)

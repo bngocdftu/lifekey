@@ -407,8 +407,7 @@ approve_and_commit clients
 #   doctor-a  ER attending who asks for records. NEVER an approver.
 #   doctor-b  Clinical approver (becomes tide-realm-admin after init, see docs/RUNBOOK.md).
 #   doctor-c  Access approver   (becomes tide-realm-admin after init).
-#   patient-alice  The synthetic patient PAT-001. Signs her consent, sees who opened her records,
-#             and is the "someone else" on /proof: a grant made for A must not work for her.
+#   patient-alice  The synthetic patient PAT-001. Signs her consent, sees who opened her records.
 LIFEKEY_USERS="admin doctor-a doctor-b doctor-c patient-alice"
 
 create_user() {
@@ -467,10 +466,13 @@ echo "==> Granting LifeKey roles..."
 # _tide_x.* are voucher gates only; the policies decide who reads which record.
 grant_realm_roles "$(user_id admin)"    lifekey-recorder _tide_encryptor _tide_x.selfencrypt
 grant_realm_roles "$(user_id doctor-a)" lifekey-clinician er-attending _tide_decryptor _tide_x.selfdecrypt
-# The patient holds the decrypt CAPABILITY but no policy names her or her role, so she reads
-# nothing. It makes /proof P1 a true "wrong subject" refusal, not a missing-capability one.
+# The patient holds the decrypt CAPABILITY only: she reads her own record once the quorum signs a
+# patient-self policy naming her key and that record. No standing policy names her.
 grant_realm_roles "$(user_id patient-alice)" lifekey-patient _tide_decryptor _tide_x.selfdecrypt
-# B and C get no record roles: approving a request must not also let them read it.
+# B and C get the decrypt CAPABILITY only. No policy names them or a role they hold, so they read
+# nothing; it makes /proof B2 ("use the grant you just signed for A") a true wrong-subject refusal.
+grant_realm_roles "$(user_id doctor-b)" _tide_decryptor _tide_x.selfdecrypt
+grant_realm_roles "$(user_id doctor-c)" _tide_decryptor _tide_x.selfdecrypt
 sleep 2
 approve_and_commit roles
 

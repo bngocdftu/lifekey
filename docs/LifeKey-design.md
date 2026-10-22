@@ -1,250 +1,251 @@
 # LifeKey: Emergency Medical Passport (v2)
 
-> **Trạng thái:** kiến trúc đã đối chiếu với mã nguồn TideCloak/ORK (10/2026); có bản thử chạy được trong repo này (`docs/RUNBOOK.md`). Còn 3 điểm phải xác nhận khi chạy live (mục 6.3).
-> **Chỉ dùng dữ liệu y tế giả lập.** Không dùng cho chăm sóc bệnh nhân thật.
+> **Status:** architecture checked against the TideCloak/ORK source code (Oct 2026); a working prototype is in this repo (`docs/RUNBOOK.md`); the UI is in English. Three points still need confirming on a live run (section 6.3).
+> **Synthetic medical data only.** Not for real patient care.
 
 ## 0. Pitch
 
-**Một dòng:** *LifeKey cho bác sĩ cấp cứu thấy ngay cảnh báo sống còn. Hồ sơ chi tiết chỉ mở cho đúng một bác sĩ, đúng một hồ sơ, trong thời hạn ngắn, và ngay cả admin hay server bị hack cũng không tự mở được.*
+**One line:** *LifeKey shows emergency doctors the life-critical alerts at once. Detailed records open only for one doctor, one record, for a short time, and not even an admin or a hacked server can open them alone.*
 
-### Vì sao phải là Tide
+### Why it has to be Tide
 
-| Hệ thống thường (RBAC + mã hoá DB) | LifeKey trên Tide |
+| Typical system (RBAC + DB encryption) | LifeKey on Tide |
 |---|---|
-| Server giữ khoá → server bị hack là lộ hết | Server chỉ có ciphertext. Khoá phân tán trên mạng ORK; không nơi nào giữ đủ khoá |
-| Admin/DBA sửa một dòng là tự cấp quyền | Mỗi quyền đọc là một **policy** chỉ có hiệu lực khi **quorum admin ký**. Server không ký được |
-| "Ai được đọc" kiểm tra trong code app | Mạng ORK kiểm tra **trên mỗi lần giải mã**: đúng người (Tide key), đúng record (tag), đúng thao tác, chưa hết hạn |
+| The server holds the keys → hack the server and everything leaks | The server holds only ciphertext. Keys are distributed across the ORK network; no single place holds a whole key |
+| An admin/DBA edits one row and grants themselves access | Every read grant is a **policy** that takes effect only once a **quorum of admins signs** it. The server cannot sign |
+| "Who may read" is checked in app code | The ORK network checks **on every decryption**: right person (Tide key), right record (tag), right operation, not expired |
 
-Ba câu để nói với giám khảo:
-1. **Hack server LifeKey → chỉ lấy được ciphertext.**
-2. **Không một người nào, kể cả admin, tự mở được hồ sơ.**
-3. **Grant cho bác sĩ A dùng cho MED-204 thì không mở được MED-205, không dùng được cho người khác (kể cả chính bệnh nhân), và tự hết hạn.** Trang `/proof` chứng minh điều này trực tiếp trên mạng Tide.
+Three sentences for the judges:
+1. **Hack the LifeKey server → you only get ciphertext.**
+2. **No single person, admin included, can open a record alone.**
+3. **A grant for Doctor A on MED-204 cannot open MED-205, cannot be used by anyone else (including the approver who signed it), and expires on its own.** The `/proof` page demonstrates this directly against the Tide network.
 
-## 1. Vấn đề và giới hạn thừa nhận
+## 1. The problem and acknowledged limits
 
-- Người **chưa có hồ sơ** trong LifeKey hoặc bệnh viện tích hợp: không có phép màu nào lấy được lịch sử. LifeKey hiện *"No previous medical records available"* và không suy đoán.
-- Bệnh nhân bất tỉnh không đồng ý được. Quyền cấp cứu dựa trên **đồng ý trước** (lúc enrollment) hoặc căn cứ pháp lý/quy định bệnh viện. Chữ ký của nhân viên y tế **không tạo ra** sự đồng ý của bệnh nhân.
-- Phân quyền **không được làm chậm xử trí**: xem mục 2 và 3.
+- For someone with **no record** in LifeKey or an integrated hospital, nothing can conjure up a history. LifeKey shows *"No previous medical records available"* and does not guess.
+- An unconscious patient cannot consent. Emergency access rests on **prior consent** (given at enrollment) or on a legal basis/hospital policy. A clinician's signature **does not create** patient consent.
+- Access control **must not delay treatment**: see sections 2 and 3.
 
-## 2. Ba đường truy cập, theo độ khẩn
+## 2. Three access paths, by urgency
 
-Đây là câu trả lời cho câu hỏi *"3 giờ sáng thì tìm B và C ở đâu?"*: **không phải lúc nào cũng cần B và C.**
+This is the answer to *"At 3 a.m., where do you find B and C?"*: **you don't always need B and C.**
 
-| Đường | Ai | Thời gian tới dữ liệu | Ai đã phê duyệt, khi nào | Cơ chế Tide |
+| Path | Who | Time to data | Who approved, and when | Tide mechanism |
 |---|---|---|---|---|
-| **Tier 0** (tuỳ chọn) | Bất kỳ ai cầm thẻ/màn hình khoá | 0 giây, không đăng nhập | Bệnh nhân tự chọn nội dung | Không mã hoá, tương đương Medical ID |
-| **Tier 1**: Critical Summary | Bác sĩ đã xác minh (`lifekey-clinician`) | Thời gian đăng nhập | Quorum ký **một lần lúc enrollment** | Standing policy, subject = Role |
-| **Tier 2 break-glass** | ER attending trực (`er-attending`) | Vài giây (ghi lý do) | Bệnh nhân cho phép trước + quorum ký lúc enrollment; **2 người rà soát sau** | Standing policy, subject = Role, chỉ các record bệnh nhân đánh dấu |
-| **Tier 2 quorum** | Đúng 1 bác sĩ | Vài phút (chờ 2 chữ ký) | 2 approver, **tại thời điểm yêu cầu** | Policy riêng: User + record + hết hạn |
-| **Tier 3** | Không mở qua luồng cấp cứu | — | Căn cứ pháp lý riêng | Grant Tier 2 không bao giờ mở được Tier 3 |
+| **Tier 0** (optional) | Anyone holding the card / lock screen | 0 seconds, no login | The patient chooses the content | Not encrypted, equivalent to Medical ID |
+| **Tier 1**: Critical Summary | Verified clinician (`lifekey-clinician`) | Login time | Quorum signs **once at enrollment** | Standing policy, subject = Role |
+| **Tier 2 break-glass** | On-duty ER attending (`er-attending`) | A few seconds (reason recorded) | Patient's prior permission + quorum signature at enrollment; **2 reviewers afterwards** | Standing policy, subject = Role, only records the patient marked |
+| **Tier 2 quorum** | Exactly 1 doctor | A few minutes (waiting for 2 signatures) | 2 approvers, **at the time of the request** | Dedicated policy: User + record + expiry |
+| **Tier 3** | Not opened through the emergency flow | — | Separate legal basis | A Tier 2 grant can never open Tier 3 |
 
-> **Quorum dùng cho truy cập thông thường; break-glass dùng khi khẩn cấp thật.** Break-glass không bỏ quorum, mà **dời quorum lên trước**: lúc enrollment, bệnh nhân và hội đồng duyệt quyết định hồ sơ nào được mở theo cách này, cho vai trò nào.
+> **Quorum is for routine access; break-glass is for real emergencies.** Break-glass does not skip the quorum, it **moves the quorum earlier**: at enrollment, the patient and the approval board decide which records can be opened this way, and for which role.
 
 ## 3. Break-glass
 
-### 3.1 Luồng
+### 3.1 Flow
 
 ```mermaid
 flowchart TD
-    A[Doctor A xem ALERT-88 ở Tier 1] --> B{MED-204 có<br/>break-glass eligible?}
-    B -->|Không| Q[Đường quorum: tạo request, chờ 2 chữ ký]
-    B -->|Có| C{A có role er-attending?}
-    C -->|Không| Q
-    C -->|Có| D[A ghi lý do khẩn cấp, xác nhận]
-    D --> E[LifeKey ghi audit, thông báo bệnh nhân,<br/>người liên hệ, approver trực, privacy officer]
-    E --> F[Server trả standing policy break-glass]
-    F --> G[Mạng ORK kiểm tra: A có er-attending,<br/>tag = MED-204, quyền đọc, chưa hết hạn]
-    G --> H[A đọc MED-204 trong trình duyệt]
-    H --> I[Trong 72h: 2 approver rà soát]
-    I -->|Hợp lý| J[JUSTIFIED]
-    I -->|Không hợp lý| K[FLAGGED → quorum thu hồi er-attending]
+    A[Doctor A views ALERT-88 at Tier 1] --> B{Is MED-204<br/>break-glass eligible?}
+    B -->|No| Q[Quorum path: create request, wait for 2 signatures]
+    B -->|Yes| C{Does A have role er-attending?}
+    C -->|No| Q
+    C -->|Yes| D[A records an emergency reason, confirms]
+    D --> E[LifeKey writes audit, notifies the patient,<br/>contacts, on-call approver, privacy officer]
+    E --> F[Server returns the standing break-glass policy]
+    F --> G[ORK network checks: A has er-attending,<br/>tag = MED-204, read permission, not expired]
+    G --> H[A reads MED-204 in the browser]
+    H --> I[Within 72h: 2 approvers review]
+    I -->|Justified| J[JUSTIFIED]
+    I -->|Not justified| K[FLAGGED → quorum revokes er-attending]
 ```
 
-### 3.2 Cái gì do mạng Tide thực thi, cái gì do app
+### 3.2 What the Tide network enforces and what the app enforces
 
-Bảng này cần trung thực trước giám khảo:
+This table has to be honest in front of the judges:
 
-| Kiểm soát | Thực thi bởi | Ghi chú |
+| Control | Enforced by | Notes |
 |---|---|---|
-| Chỉ người có `er-attending` đọc được | **Mạng ORK** | Role được cấp qua change request có quorum |
-| Chỉ các record bệnh nhân cho phép | **Mạng ORK** | Mỗi record một policy riêng; không có policy cho MED-205 hay PSY-301 |
-| Không bao giờ mở Tier 3 | **Mạng ORK** + quy tắc enrollment | `validateGrant` từ chối tạo policy break-glass cho Tier 3 |
-| Policy tự hết hạn (30 ngày) và phải ký lại | **Mạng ORK** | Expiry được ký trong policy (policy v4) |
-| Bắt buộc lý do, thông báo, giới hạn 3 lần/24h | App LifeKey | Server chỉ trả policy sau khi khai báo |
-| Rà soát bởi 2 người khác bác sĩ đó | App LifeKey | Kết luận "không hợp lý" → đề xuất thu hồi role (qua quorum) |
-| Audit chuỗi hash | App LifeKey | Phát hiện sửa/xoá, nhưng không chống được người kiểm soát server viết lại toàn bộ chuỗi |
+| Only holders of `er-attending` can read | **ORK network** | The role is granted through a quorum-approved change request |
+| Only records the patient allowed | **ORK network** | One policy per record; there is no policy for MED-205 or PSY-301 |
+| Tier 3 is never opened | **ORK network** + enrollment rule | `validateGrant` refuses to create a break-glass policy for Tier 3 |
+| Policy expires on its own (30 days) and must be re-signed | **ORK network** | The expiry is signed into the policy (policy v4) |
+| Mandatory reason, notifications, limit of 3 uses per 24h | LifeKey app | The server returns the policy only after the declaration |
+| Review by 2 people other than that doctor | LifeKey app | A "not justified" verdict → proposal to revoke the role (via quorum) |
+| Hash-chained audit | LifeKey app | Detects edits/deletions, but cannot stop someone who controls the server from rewriting the whole chain |
 
-**Giới hạn đã biết (đã đưa vào `/proof`, phép thử A7):** policy không phải bí mật. Một `er-attending` đã có policy bytes thì có thể giải mã MED-204 mà **không khai báo** qua LifeKey. Mạng vẫn chặn mọi người không có role và mọi record khác, nhưng *lý do và thông báo* chỉ được đảm bảo ở tầng app.
-Hướng nâng cấp: (a) expiry ngắn hơn và ký lại định kỳ; (b) một Forseti contract riêng yêu cầu bằng chứng khai báo, kiểu `ValidateData` kiểm tra một attestation "break-glass declared" (contract tuỳ chỉnh do Tide team deploy, nên để sau hackathon); (c) đối chiếu log giải mã phía ORK nếu Tide cung cấp.
+**Known limit (included in `/proof`, check A7):** a policy is not a secret. An `er-attending` who already has the policy bytes can decrypt MED-204 **without declaring** through LifeKey. The network still blocks everyone without the role and every other record, but the *reason and notifications* are only guaranteed at the app layer.
+Upgrade paths: (a) shorter expiry and periodic re-signing; (b) a dedicated Forseti contract that requires proof of declaration, e.g. a `ValidateData` that checks a "break-glass declared" attestation (custom contracts are deployed by the Tide team, so this waits until after the hackathon); (c) reconciling against ORK-side decryption logs if Tide provides them.
 
-### 3.3 Slide "Quorum vs Break-glass"
+### 3.3 "Quorum vs Break-glass" slide
 
-| | Quorum (thường ngày) | Break-glass (khẩn cấp thật) |
+| | Quorum (routine) | Break-glass (real emergency) |
 |---|---|---|
-| Khi nào | Bệnh nhân ổn định, cần xem thêm hồ sơ | Bất tỉnh, chảy máu, không chờ được |
-| Ai duyệt | 2 approver, **trước** khi đọc | Bệnh nhân + quorum **từ lúc enrollment**; 2 người **rà soát sau** |
-| Phạm vi | Đúng 1 bác sĩ, 1 hồ sơ, 2 giờ | Role `er-attending`, chỉ hồ sơ bệnh nhân đánh dấu, không bao giờ Tier 3 |
-| Mạng Tide kiểm tra | Tide key của bác sĩ, tag record, hết hạn | Role, tag record, hết hạn |
-| Hậu quả lạm dụng | Không có quyền thì không đọc được | Bị gắn cờ, quorum thu hồi role |
+| When | Patient is stable, more of the record is needed | Unconscious, bleeding, cannot wait |
+| Who approves | 2 approvers, **before** reading | Patient + quorum **at enrollment**; 2 people **review afterwards** |
+| Scope | Exactly 1 doctor, 1 record, 2 hours | Role `er-attending`, only records the patient marked, never Tier 3 |
+| Tide network checks | Doctor's Tide key, record tag, expiry | Role, record tag, expiry |
+| Consequence of abuse | No grant, no read | Flagged, quorum revokes the role |
 
-## 4. Tier 1: cảnh báo phải cụ thể
+## 4. Tier 1: alerts must be specific
 
-v1 có mâu thuẫn: bảng ghi Tier 1 chứa "thuốc nguy cơ cao", nhưng ví dụ lại là *"Có thông tin thuốc cần kiểm tra…"*. v2 sửa theo quy tắc sau:
+v1 contradicted itself: the table said Tier 1 contains "high-risk medications", but the example read *"There is medication information to check…"*. v2 fixes this with the following rules:
 
-- **Tier 1 nói thẳng thông tin cần để hành động**: tên thuốc, liều, dị ứng, thiết bị cấy ghép.
-- **Chỉ được khái quát hoá khi nguồn là Tier 3** và bệnh nhân chọn không nêu tên.
-- Mỗi cảnh báo có `source_record_id`, trạng thái xác minh, người và thời điểm xác minh.
+- **Tier 1 states the information needed to act**: drug name, dose, allergies, implanted devices.
+- **Generalisation is allowed only when the source is Tier 3** and the patient chose not to name it.
+- Every alert has a `source_record_id`, a verification status, and who verified it and when.
 
 ```json
 {
   "alert_id": "ALERT-88",
   "source_record_id": "MED-204",
   "category": "high_risk_medication",
-  "message": "Đang dùng warfarin 5 mg/ngày (chống đông). Nguy cơ chảy máu: kiểm tra INR trước thủ thuật.",
+  "message": "Taking warfarin 5 mg/day (anticoagulant). Bleeding risk: check INR before procedures.",
   "context_tags": ["trauma", "surgery", "bleeding"],
   "verification_status": "clinician_verified",
   "verified_at": "2026-10-20T10:00:00Z"
 }
 ```
 
-Ví dụ khái quát hoá hợp lệ (nguồn Tier 3): *"Có hồ sơ hạn chế liên quan đến tương tác thuốc an thần. Cân nhắc trước khi dùng benzodiazepine."*
+A valid generalised example (Tier 3 source): *"There is a restricted record related to sedative interactions. Take care before giving benzodiazepines."*
 
-Màn hình Tier 1 luôn phân biệt **đã xác minh**, **bệnh nhân tự khai**, **chưa xác minh** và **chưa có dữ liệu**. "Chưa có dữ liệu" không có nghĩa là không có nguy cơ.
+The Tier 1 screen always distinguishes **verified**, **patient-reported**, **unverified** and **no data yet**. "No data yet" does not mean there is no risk.
 
-Khi đã có Tier 1 cụ thể, Tier 2 chỉ cần khi bác sĩ muốn **chi tiết** (lịch sử INR, toàn bộ danh sách thuốc), không cần cho quyết định đầu tiên.
+With a specific Tier 1 in place, Tier 2 is needed only when the doctor wants **detail** (INR history, the full medication list), not for the first decision.
 
-## 5. "Bác sĩ đã xác thực" là ai
+## 5. Who counts as a "verified clinician"
 
-| Bước | Làm gì | Ai/cơ chế |
+| Step | What happens | Who/mechanism |
 |---|---|---|
-| Danh tính | Đăng nhập Tide (BYOiD): không mật khẩu nào nằm trên server | Tide |
-| Xác minh hành nghề | Bệnh viện đối chiếu chứng chỉ hành nghề (ở VN: CCHN / tra cứu cơ quan quản lý) | Phòng nhân sự/khoa |
-| Cấp `lifekey-clinician` | Change request trong TideCloak, **quorum duyệt** | QEA |
-| Cấp `er-attending` | Theo lịch trực khoa cấp cứu, cũng qua quorum | QEA |
-| Nghỉ việc / chuyển khoa | Thu hồi role (change request); policy theo Role mất hiệu lực ở lần đăng nhập/refresh token kế tiếp | QEA |
+| Identity | Tide login (BYOiD): no password is stored on the server | Tide |
+| Practice verification | The hospital checks the practising licence (in Vietnam: the CCHN / regulator lookup) | HR / department |
+| Grant `lifekey-clinician` | Change request in TideCloak, **quorum-approved** | QEA |
+| Grant `er-attending` | Follows the emergency department's duty roster, also via quorum | QEA |
+| Leaving / changing department | Revoke the role (change request); Role-based policies stop working at the next login/token refresh | QEA |
 
-**Nhân viên cứu thương ngoài hiện trường / bệnh viện chưa tích hợp:**
-- Thấy **Tier 0** (thẻ ví hoặc màn hình khoá, bệnh nhân tự chọn), giống Medical ID.
-- Nếu tổ chức của họ onboard vào realm thì được role `lifekey-responder` với một standing policy Tier 1 riêng (chưa có trong bản thử).
-- Họ **không** thấy Tier 1 nếu không được xác minh. Đó là đánh đổi có chủ đích: Tier 1 có tên thuốc và bệnh lý.
+**Paramedics in the field / hospitals not yet integrated:**
+- See **Tier 0** (wallet card or lock screen, chosen by the patient), like Medical ID.
+- If their organisation is onboarded into the realm, they get the `lifekey-responder` role with its own standing Tier 1 policy (not in the prototype yet).
+- They do **not** see Tier 1 unless verified. That is a deliberate trade-off: Tier 1 contains drug names and conditions.
 
-So với Medical ID: Tier 0 của LifeKey *chính là* Medical ID. LifeKey thêm phần Medical ID không có: thông tin đã được bác sĩ xác minh, có nguồn, có audit, và đường mở hồ sơ chi tiết có kiểm soát.
+Compared with Medical ID: LifeKey's Tier 0 *is* Medical ID. LifeKey adds what Medical ID lacks: clinician-verified information with a source, an audit trail, and a controlled path to the detailed records.
 
-## 6. Tích hợp Tide: đã kiểm chứng gì
+## 6. Tide integration: what has been verified
 
-### 6.1 Cơ chế dùng
+### 6.1 Mechanisms used
 
-| Thành phần | Cách dùng trong LifeKey |
+| Component | How LifeKey uses it |
 |---|---|
-| **`RelationshipAttestation:1`** (contract có sẵn trong ORK, không phải viết C#) | Mỗi grant = 1 policy: `subjectType` (User/Role) + `subjectId` + `assignmentId` (= record id) + `roles` (`_tide_decryptor` đọc / `_tide_encryptor` ghi). Mỗi ciphertext chỉ có **một tag = record id** |
-| **`POST /admin/realms/{realm}/iga/jit-policies`** với policy dựng sẵn | Tạo change request `SIGN_JIT_POLICY`. Policy **chưa tồn tại** cho tới khi quorum admin duyệt. Lúc commit, TideCloak ký Policy:1 bằng chữ ký các admin rồi lưu vào `/iga/role-policies/name/{name}` |
-| **Duyệt** | Từ trình duyệt của approver, bằng token của chính họ: `POST /iga/change-requests/{id}/approve` → ký `requestModel` trong Tide enclave → POST lại |
-| **Giải mã** | `IAMService.doDecrypt([{ encrypted, tags: [recordId] }], signedPolicy)` trong trình duyệt bác sĩ |
+| **`RelationshipAttestation:1`** (a contract already in the ORK, no C# to write) | Each grant = 1 policy: `subjectType` (User/Role) + `subjectId` + `assignmentId` (= record id) + `roles` (`_tide_decryptor` read / `_tide_encryptor` write). Each ciphertext has exactly **one tag = record id** |
+| **`POST /admin/realms/{realm}/iga/jit-policies`** with a prebuilt policy | Creates a `SIGN_JIT_POLICY` change request. The policy **does not exist** until the admin quorum approves. On commit, TideCloak signs Policy:1 with the admins' signatures and stores it at `/iga/role-policies/name/{name}` |
+| **Approval** | From the approver's browser, with their own token: `POST /iga/change-requests/{id}/approve` → sign the `requestModel` in the Tide enclave → POST back |
+| **Decryption** | `IAMService.doDecrypt([{ encrypted, tags: [recordId] }], signedPolicy)` in the doctor's browser |
 
-### 6.2 Dữ kiện đã kiểm chứng từ mã nguồn
+### 6.2 Facts verified from the source code
 
-| Dữ kiện | Nguồn |
+| Fact | Source |
 |---|---|
-| Contract kiểm tra: đúng subject (Tide key / group / role), tag = `assignmentId` và chỉ 1 tag, policy cho phép thao tác, người gọi có `_tide_decryptor`/`_tide_encryptor`, chưa hết hạn | `raziel-mcp/reference-apps/relationship-attestation/scenario.md` (đối chiếu ORK `main` @ `c69fc4f6`, 2026-10-16, đã đo end-to-end) |
-| `jit-policies` nhận policy dựng sẵn ("any well-formed policy for this realm"), trả 202, chỉ ký khi quorum duyệt | `tidecloak-iga-extensions/iga-core/.../IgaAdminResource.java` `requestJitPolicy`, `TideAttestor.replaySignJitPolicy` |
-| Ngưỡng = `max(1, floor(0.7 × số tide-realm-admin))` → **2 admin chỉ cần 1 chữ ký; cần ≥ 3 admin để bắt buộc 2 chữ ký** | `canon/iga-change-requests-api.md`, docs.tide.org Quorum Enforced Governance |
-| **Không có luật "người tạo request không được tự duyệt"** trong iga-core | `canon/iga-change-requests-api.md` (status 409) |
-| Approval được ghi cho **người gọi HTTP**, nên duyệt qua proxy server thì mọi chữ ký gộp thành 1 phiếu | như trên |
-| Policy v4 có expiry được ký; mạng từ chối policy hết hạn trước khi chạy contract | Release notes TideCloak 0.14.28 |
-| Approver cần `manage-realm` (endpoint `approve` gọi `requireManageRealm`) + `tide-realm-admin` | `IgaAdminResource.approve` |
+| The contract checks: right subject (Tide key / group / role), tag = `assignmentId` and only 1 tag, the policy allows the operation, the caller has `_tide_decryptor`/`_tide_encryptor`, not expired | `raziel-mcp/reference-apps/relationship-attestation/scenario.md` (checked against ORK `main` @ `c69fc4f6`, 2026-10-16, measured end-to-end) |
+| `jit-policies` accepts a prebuilt policy ("any well-formed policy for this realm"), returns 202, signs only when the quorum approves | `tidecloak-iga-extensions/iga-core/.../IgaAdminResource.java` `requestJitPolicy`, `TideAttestor.replaySignJitPolicy` |
+| Threshold = `max(1, floor(0.7 × number of tide-realm-admins))` → **2 admins need only 1 signature; at least 3 admins are needed to require 2 signatures** | `canon/iga-change-requests-api.md`, docs.tide.org Quorum Enforced Governance |
+| **There is no "the request creator cannot approve it" rule** in iga-core | `canon/iga-change-requests-api.md` (status 409) |
+| An approval is recorded for **the HTTP caller**, so approving through a server proxy collapses every signature into 1 vote | as above |
+| Policy v4 has a signed expiry; the network rejects an expired policy before running the contract | TideCloak 0.14.28 release notes |
+| An approver needs `manage-realm` (the `approve` endpoint calls `requireManageRealm`) + `tide-realm-admin` | `IgaAdminResource.approve` |
 
-Hệ quả thiết kế:
-- **Doctor A không bao giờ là tide-realm-admin**: đây là cách duy nhất chặn tự duyệt ở tầng Tide. LifeKey chặn thêm ở tầng app (`canApprove`, và approver không được tạo request).
-- Demo cần **3 approver** (records officer, B, C), ngưỡng 2-of-3. Nói rõ là "2 trong 3", không phải "B và C bắt buộc".
-- Thu hồi một grant `User` trước hạn: **không có tức thì**. Dùng hạn ngắn (mặc định 2h, tối đa 4h). Muốn cắt ngay một bác sĩ thì thu hồi role `_tide_decryptor` (mất quyền với *mọi* record).
+Design consequences:
+- **Doctor A is never a tide-realm-admin**: this is the only way to block self-approval at the Tide layer. LifeKey adds a block at the app layer (`canApprove`, and approvers cannot create requests).
+- The demo needs **3 approvers** (records officer, B, C), threshold 2-of-3. Say clearly that it is "2 of 3", not "B and C are both required".
+- Revoking a `User` grant before it expires: **not instant**. Use short lifetimes (default 2h, maximum 4h). To cut off a doctor immediately, revoke the `_tide_decryptor` role (loses access to *every* record).
 
-### 6.3 Còn phải xác nhận khi chạy live
+### 6.3 Still to confirm on a live run
 
-1. Mạng mà `tideorg/tidecloak-dev` dùng đã có `RelationshipAttestation:1` (ORK build từ 16/10/2026). Nếu chưa có, hỏi Tide team, **không** tự viết contract thay.
-2. TideCloak giải mã (`Policy.From`) rồi mã hoá lại (`ToBytes`) policy do JS dựng mà ra đúng các byte đó. LifeKey xếp param theo thứ tự khoá đã sort để giảm rủi ro; trang `/setup` báo `FAILED` nếu policy đã ký khác với cái đã gửi.
-3. Role voucher: bản thử cấp thêm `_tide_x.selfdecrypt` / `_tide_x.selfencrypt` phòng trường hợp voucher của ORK chưa nhận `_tide_decryptor`.
+1. The network used by `tideorg/tidecloak-dev` already has `RelationshipAttestation:1` (ORK build from 16/10/2026). If not, ask the Tide team; do **not** write a replacement contract.
+2. TideCloak decoding (`Policy.From`) and re-encoding (`ToBytes`) a JS-built policy yields exactly the same bytes. LifeKey orders params by sorted key to reduce the risk; the `/setup` page reports `FAILED` if the signed policy differs from what was sent.
+3. Voucher roles: the prototype also grants `_tide_x.selfdecrypt` / `_tide_x.selfencrypt` in case the ORK voucher does not yet accept `_tide_decryptor`.
 
-## 7. So sánh
+## 7. Comparison
 
-| | Apple/Android Medical ID | International Patient Summary (IPS, HL7 FHIR) | EHR có break-the-glass (Epic, Cerner…) | Care Passport | **LifeKey** |
+| | Apple/Android Medical ID | International Patient Summary (IPS, HL7 FHIR) | EHR with break-the-glass (Epic, Cerner…) | Care Passport | **LifeKey** |
 |---|---|---|---|---|---|
-| Xem không cần đăng nhập | ✅ | — (định dạng, không phải app) | ❌ | ? | ✅ Tier 0 |
-| Thông tin đã được bác sĩ xác minh, có nguồn | ❌ bệnh nhân tự nhập | ✅ | ✅ | ? | ✅ |
-| Truy cập tăng dần theo độ khẩn | ❌ | ❌ | Một phần | ❌ | ✅ Tier 0 → 1 → break-glass/quorum |
-| Break-glass | — | — | ✅ nhưng chỉ ở tầng app, admin EHR vượt được | ? | ✅ role và record do mạng thực thi |
-| Server/admin bị chiếm vẫn không lộ hồ sơ | — (lưu trên máy) | phụ thuộc nơi lưu | ❌ | ? | ✅ |
-| Grant đúng người + đúng record + có hạn, kiểm tra ngoài server | ❌ | ❌ | ❌ | ? | ✅ |
+| Viewable without login | ✅ | — (a format, not an app) | ❌ | ? | ✅ Tier 0 |
+| Clinician-verified information with a source | ❌ patient-entered | ✅ | ✅ | ? | ✅ |
+| Access escalates with urgency | ❌ | ❌ | Partly | ❌ | ✅ Tier 0 → 1 → break-glass/quorum |
+| Break-glass | — | — | ✅ but app-layer only, an EHR admin can bypass it | ? | ✅ role and record enforced by the network |
+| Records stay safe if the server/admin is compromised | — (stored on device) | depends on where it is stored | ❌ | ? | ✅ |
+| Grant bound to the right person + right record + expiry, checked outside the server | ❌ | ❌ | ❌ | ? | ✅ |
 
-IPS là **định dạng** nên dùng cho Tier 1 khi tích hợp thật (`Patient`, `AllergyIntolerance`, `MedicationStatement`, `Flag`). LifeKey không cạnh tranh với IPS mà bọc IPS bằng lớp phân quyền mạng.
+IPS is the **format** to use for Tier 1 in a real integration (`Patient`, `AllergyIntolerance`, `MedicationStatement`, `Flag`). LifeKey does not compete with IPS; it wraps IPS in a network-enforced access layer.
 
-## 8. Demo (3 phút)
+## 8. Demo (3 minutes)
 
-Mở sẵn 5 browser profile: admin, A, B, C, D.
+Have 5 browser profiles open: admin, A, B, C, D.
 
-1. **(20s) Vì sao Tide:** mở `data/lifekey-store.json`: chỉ có ciphertext.
-2. **(30s) Tier 1:** A quét QR → thấy ngay *warfarin 5 mg/ngày*, dị ứng penicillin, van tim cơ học.
-3. **(40s) Quorum:** A bấm *View source record* trên ALERT-88 → REQ-1042 cho MED-204. A thử giải mã: bị từ chối. B duyệt → `1/2`, A vẫn bị từ chối. C duyệt → `COMMITTED`. A giải mã được MED-204.
-4. **(30s) Phạm vi:** `/proof` với A: A2 (MED-205), A3 (Tier 3), A5 (ghi đè) đều bị **mạng Tide** từ chối, kèm thông báo của contract.
-5. **(20s) Người khác:** `/proof` với bệnh nhân: P1, dùng grant bị lộ của A → *subjectId does not match*.
-6. **(30s) Break-glass:** "Giờ là 3 giờ sáng." A bấm Break glass, ghi lý do, đọc MED-204 ngay. B thấy trong hàng chờ rà soát.
-7. **(10s) Server không duyệt hộ được:** `/proof` S1.
+1. **(20s) Why Tide:** open `data/lifekey-store.json`: it holds only ciphertext.
+2. **(30s) Tier 1:** A scans the QR → immediately sees *warfarin 5 mg/day*, penicillin allergy, mechanical heart valve.
+3. **(40s) Quorum:** A clicks *View source record* on ALERT-88 → REQ-1042 for MED-204. A tries to decrypt: denied. B approves → `1/2`, A is still denied. C approves → `COMMITTED`. A can decrypt MED-204.
+4. **(30s) Scope:** `/proof` as A: A2 (MED-205), A3 (Tier 3), A5 (overwrite) are all denied by **the Tide network**, with the contract's message.
+5. **(20s) Someone else:** `/proof` as B: B2, using the very grant B just signed for A → *subjectId does not match*.
+6. **(30s) Break-glass:** "It's now 3 a.m." A clicks Break glass, records a reason, reads MED-204 at once. B sees it in the review queue.
+7. **(10s) The server cannot approve on anyone's behalf:** `/proof` S1.
 
-## 9. Security test cases (khớp với `/proof`)
+## 9. Security test cases (matching `/proof`)
 
-| ID | Ai | Phép thử | Mong đợi | Ai chặn |
+| ID | Who | Check | Expected | Blocked by |
 |---|---|---|---|---|
-| A1 | A | Đọc MED-204 bằng grant của chính A | Cho phép | — |
-| A2 | A | Grant MED-204 → đọc MED-205 | Từ chối | ORK (tag) |
-| A3 | A | Grant MED-204 → đọc Tier 3 | Từ chối | ORK (tag) |
-| A4 | A | Gắn tag MED-204 lên ciphertext MED-205 | Từ chối | ORK (khoá theo tag) |
-| A5 | A | Ghi bằng grant chỉ-đọc | Từ chối | ORK (`roles`) |
-| A6 | A | Policy Tier 1 → đọc MED-204 | Từ chối | ORK (tag) |
-| A7 | A | Policy break-glass không khai báo | **Cho phép** (giới hạn đã biết) | — |
-| A8 | A | Đọc Tier 1 | Cho phép | — |
-| P1 | Bệnh nhân | Dùng grant của A | Từ chối | ORK (subject) |
-| P2 | Bệnh nhân | Break-glass khi không phải er-attending | Từ chối | ORK (role) |
-| P3 | Bệnh nhân | Dùng policy Tier 1 của bác sĩ để đọc bản tóm tắt của mình | Từ chối | ORK (role) |
-| R1 | admin | Records officer đọc lại hồ sơ đã ghi | Từ chối | ORK (`roles` chỉ ghi) |
-| B1 | B, C | Approver đọc Tier 1 | Từ chối | ORK (không có role) |
-| S1 | bất kỳ | Server master-admin tự duyệt CR | Không được ghi nhận | TideCloak (cần enclave) |
-| — | B một mình | Chỉ 1 chữ ký | Policy chưa tồn tại | TideCloak quorum |
-| — | A | Sửa request sau khi gửi | `FAILED_VALIDATION` | LifeKey (digest + so policy đã ký) |
-| — | A | Hết hạn | Từ chối giải mã mới | ORK (expiry) |
-| — | A | Tự duyệt | Không thể | A không phải admin + `canApprove` |
+| A1 | A | Read MED-204 with A's own grant | Allowed | — |
+| A2 | A | MED-204 grant → read MED-205 | Denied | ORK (tag) |
+| A3 | A | MED-204 grant → read Tier 3 | Denied | ORK (tag) |
+| A4 | A | Put the MED-204 tag on the MED-205 ciphertext | Denied | ORK (key per tag) |
+| A5 | A | Write with a read-only grant | Denied | ORK (`roles`) |
+| A6 | A | Tier 1 policy → read MED-204 | Denied | ORK (tag) |
+| A7 | A | Break-glass policy without declaring | **Allowed** (known limit) | — |
+| A8 | A | Read Tier 1 | Allowed | — |
 
-Giới hạn thu hồi: plaintext đã xem, chụp hoặc tải xuống thì không thu hồi được.
+| R1 | admin | Records officer reads back a record they wrote | Denied | ORK (`roles` write-only) |
+| B1 | B, C | Approver reads Tier 1 | Denied | ORK (no role) |
+| B2 | B, C | Use A's grant (the very grant they signed) | Denied | ORK (subject) |
+| B3 | B, C | Break-glass without being er-attending | Denied | ORK (role) |
+| S1 | anyone | Server master-admin approves a CR by itself | Not recorded | TideCloak (enclave required) |
+| — | B alone | Only 1 signature | Policy does not exist yet | TideCloak quorum |
+| — | A | Edit a request after submitting | `FAILED_VALIDATION` | LifeKey (digest + comparison with the signed policy) |
+| — | A | Expiry | New decryptions denied | ORK (expiry) |
+| — | A | Self-approval | Impossible | A is not an admin + `canApprove` |
 
-## 10. Kiến trúc và repo
+Revocation limit: plaintext that has already been viewed, screenshotted or downloaded cannot be revoked.
 
-| Thành phần | Ở đâu |
+## 10. Architecture and repo
+
+| Component | Where |
 |---|---|
 | Next.js 16 + `@tidecloak/nextjs` (DPoP strict) | `src/app` |
-| Quy tắc grant (Tier, break-glass, JIT) | `src/lib/lifekey/grants.ts` |
-| Request bất biến (digest, đối chiếu policy đã ký) | `src/lib/lifekey/requests.ts` |
-| Break-glass + rà soát | `src/lib/lifekey/breakglass.ts` |
-| Audit chuỗi hash | `src/lib/lifekey/audit.ts` |
-| Dựng/đọc policy `RelationshipAttestation:1` | `src/lib/tide/policyBytes.ts` |
-| Gọi IGA (file CR, đọc policy đã ký) | `src/lib/tide/igaServer.ts` |
-| Duyệt từ trình duyệt approver | `src/lib/client/approve.ts` |
-| Giải mã/mã hoá theo record | `src/lib/tide/relationship.ts` (template của Tide) |
-| Store (JSON, chỉ ciphertext + metadata) | `data/lifekey-store.json` (thay bằng Postgres sau) |
-| Unit test luật nghiệp vụ | `npm test` (12 test) |
+| Grant rules (Tier, break-glass, JIT) | `src/lib/lifekey/grants.ts` |
+| Immutable requests (digest, comparison with the signed policy) | `src/lib/lifekey/requests.ts` |
+| Break-glass + review | `src/lib/lifekey/breakglass.ts` |
+| Hash-chained audit | `src/lib/lifekey/audit.ts` |
+| Building/reading `RelationshipAttestation:1` policies | `src/lib/tide/policyBytes.ts` |
+| IGA calls (file CRs, read signed policies) | `src/lib/tide/igaServer.ts` |
+| Approving from the approver's browser | `src/lib/client/approve.ts` |
+| Per-record decryption/encryption | `src/lib/tide/relationship.ts` (Tide's template) |
+| Store (JSON, ciphertext + metadata only) | `data/lifekey-store.json` (to be replaced by Postgres) |
+| Unit tests for the business rules | `npm test` (12 tests) |
 
-## 11. Việc còn lại
+## 11. Remaining work
 
-- [ ] Chạy `docs/RUNBOOK.md` end-to-end trên TideCloak thật; chụp kết quả `/proof`.
-- [ ] Xác nhận 3 điểm ở 6.3.
-- [ ] QR thật (`qrcode`) + Tier 0 trên thẻ.
-- [ ] Stretch: IPS/FHIR cho Tier 1, `lifekey-responder`, Forseti contract cho break-glass.
-- [ ] Đồng ý của bệnh nhân hiện do **app** kiểm soát (`src/lib/lifekey/consent.ts`, trang `/me`): LifeKey chỉ gửi quyền bệnh nhân đã ký và từ chối mở khẩn cấp khi bệnh nhân đã rút. Để **mạng** đòi chữ ký bệnh nhân cần một Forseti contract riêng (ví dụ kiểm tra attestation "patient consented" trước khi ký policy); contract tuỳ chỉnh do Tide team deploy.
-- [ ] Bệnh nhân rút đồng ý: LifeKey ngừng phát policy ngay, nhưng policy break-glass đã ký vẫn hợp lệ trên mạng tới khi hết hạn (30 ngày). Cân nhắc hạn ngắn hơn cho standing grant.
-- [ ] Bệnh nhân chưa tự đọc được hồ sơ của mình (không có policy nào cho tài khoản bệnh nhân). Thêm grant `User` = khoá Tide của bệnh nhân nếu cần.
-- [ ] Tài khoản bệnh nhân gắn với bệnh nhân bằng `PATIENT_ACCOUNTS` trong `catalogue.ts`; bản thật cần bước xác minh danh tính khi đăng ký.
+- [ ] Run `docs/RUNBOOK.md` end-to-end on a real TideCloak; capture the `/proof` results.
+- [ ] Confirm the 3 points in 6.3.
+- [ ] Real QR (`qrcode`) + Tier 0 on the card.
+- [ ] Stretch: IPS/FHIR for Tier 1, `lifekey-responder`, a Forseti contract for break-glass.
+- [ ] Patient consent is currently enforced by the **app** (`src/lib/lifekey/consent.ts`, the `/me` page): LifeKey only files grants the patient has signed and refuses break-glass once the patient has withdrawn. For the **network** to require the patient's signature, a dedicated Forseti contract is needed (e.g. checking a "patient consented" attestation before the policy is signed); custom contracts are deployed by the Tide team.
+- [ ] Patient withdraws consent: LifeKey stops issuing the policy immediately, but a break-glass policy that is already signed stays valid on the network until it expires (30 days). Consider a shorter lifetime for standing grants.
+- [x] Patients asking to read their own record: a `patient-self` grant (`User` = the patient's Tide key, one record, at most 4 hours), signed by the quorum like a doctor's request and checked by the network at decryption.
+- [ ] Approvers' follow-up questions and patients' objections to a break-glass are app data, not conditions the network checks.
+- [ ] Patient accounts are linked to patients through `PATIENT_ACCOUNTS` in `catalogue.ts`; a real deployment needs an identity verification step at sign-up.
 
-## 12. Tham khảo
+## 12. References
 
 - TideCloak docs: https://docs.tide.org/ · Forseti: https://docs.tide.org/Core-Concepts/forseti-engine · QEA: https://docs.tide.org/Core-Concepts/iga-workflow · E2EE: https://docs.tide.org/Admin/e2ee
-- Release notes JIT policy: https://docs.tide.org/ReleaseNotes/Tidecloak-0.14.28
+- JIT policy release notes: https://docs.tide.org/ReleaseNotes/Tidecloak-0.14.28
 - `RelationshipAttestation:1`: https://github.com/tide-foundation/raziel-mcp (`reference-apps/relationship-attestation`, `templates/relationship-attestation`)
 - IGA API (jit-policies, approve): https://github.com/tide-foundation/tidecloak-iga-extensions
 - HL7 FHIR IPS: https://hl7.org/fhir/uv/ips/ · Flag: https://hl7.org/fhir/flag.html

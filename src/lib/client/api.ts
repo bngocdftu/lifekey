@@ -56,5 +56,5 @@ export function short(key: string, n = 10): string {
 
 export function fmtTime(epochSeconds?: number): string {
   if (!epochSeconds) return "—";
-  return new Date(epochSeconds * 1000).toLocaleString("vi-VN", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" });
+  return new Date(epochSeconds * 1000).toLocaleString("en-GB", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" });
 }

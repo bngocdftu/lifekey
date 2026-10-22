@@ -7,7 +7,7 @@
     "build": "next build --webpack",
     "start": "next start",
     "init": "bash scripts/init-tidecloak.sh",
-    "test": "node --test --experimental-strip-types src/lib/lifekey/*.test.ts",
+    "test": "node --test --experimental-strip-types src/lib/lifekey/*.test.ts src/preview/*.test.ts",
     "typecheck": "tsc --noEmit",
     "preview": "LIFEKEY_PREVIEW=1 NEXT_PUBLIC_LIFEKEY_PREVIEW=1 next dev --webpack -p 3100",
     "preview:build": "LIFEKEY_PREVIEW=1 NEXT_PUBLIC_LIFEKEY_PREVIEW=1 NEXT_DIST_DIR=.next-preview next build --webpack",

@@ -4,11 +4,18 @@
 
 import { PATIENT, RECORDS } from "@/lib/lifekey/catalogue";
 import { applyConsent, consentChanges, recordConsent, type PatientConsent } from "@/lib/lifekey/consent";
-import { policyName, standingGrants } from "@/lib/lifekey/grants";
+import { policyName, rolesFor, standingGrants, type GrantSpec } from "@/lib/lifekey/grants";
+import { SIM_THRESHOLD, simCannotSign, simPolicyB64 } from "./sim-tide";
 
 const now = () => Math.floor(Date.now() / 1000);
 const T0 = now();
-const b64 = (s: string) => btoa(s);
+// A simulated RelationshipAttestation:1 policy for a grant: what the quorum signed (sim-tide.ts).
+const policyB64 = (g: Pick<GrantSpec, "subject" | "recordId" | "access" | "expiry">, signed = true) =>
+  simPolicyB64({ subjectType: g.subject.type, subjectId: g.subject.id, assignmentId: g.recordId, roles: rolesFor(g.access), expiry: g.expiry, signed });
+const standingPolicy = (kind: GrantSpec["kind"], recordId: string) => {
+  const g = grants().find((x) => x.spec.kind === kind && x.spec.recordId === recordId);
+  return g ? json({ policy: policyB64(g.spec) }) : json({ error: `no signed ${kind} policy for ${recordId}` }, 404);
+};
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 
 const KEYS: Record<string, string> = {
@@ -98,12 +105,15 @@ async function answer(user: string, info: { roles: string[]; approver: boolean }
   // TideCloak's approve endpoint, called from the approver's browser.
   if (p.includes("/iga/change-requests/") && p.endsWith("/approve")) {
     const id = p.split("/").at(-2)!;
-    if (!body.requestModel) return json({ mode: "needs-approval", requestModel: btoa("preview"), authCount: 0, threshold: 2 });
     const s = (state.signers[id] ??= []);
-    if (!s.includes(user)) s.push(user);
-    const committed = s.length >= 2;
+    const requester = state.requests.find((r) => r.changeRequestId === id)?.doctorUsername;
+    const refusal = simCannotSign(user, requester, s);
+    if (refusal) return json({ error: refusal }, 403);
+    if (!body.requestModel) return json({ mode: "needs-approval", requestModel: btoa("preview"), authCount: s.length, threshold: SIM_THRESHOLD });
+    s.push(user);
+    const committed = s.length >= SIM_THRESHOLD;
     if (committed) state.requests.forEach((r) => { if (r.changeRequestId === id) r.status = "AUTHORIZED"; });
-    return json({ mode: "recorded", committed, authCount: s.length, threshold: 2 });
+    return json({ mode: "recorded", committed, authCount: s.length, threshold: SIM_THRESHOLD });
   }
   if (p.includes("/iga/change-requests/") && p.endsWith("/deny")) {
     const id = p.split("/").at(-2)!;
@@ -121,12 +131,13 @@ async function answer(user: string, info: { roles: string[]; approver: boolean }
   if (p === "/api/policies") {
     const purpose = url.searchParams.get("purpose");
     const record = url.searchParams.get("record") ?? "";
-    if (purpose === "tier1") return info.roles.includes("lifekey-clinician") ? json({ policy: b64(record) }) : json({ error: "clinicians only" }, 403);
-    if (purpose === "write") return info.roles.includes("lifekey-recorder") ? json({ policy: b64(record) }) : json({ error: "records officer only" }, 403);
-    if (purpose === "break-glass") return info.roles.includes("er-attending") ? json({ policy: b64(record) }) : json({ error: "er-attending only" }, 403);
+    if (purpose === "tier1") return info.roles.includes("lifekey-clinician") ? standingPolicy("tier1-standing", record) : json({ error: "clinicians only" }, 403);
+    if (purpose === "write") return info.roles.includes("lifekey-recorder") ? standingPolicy("recorder-write", record) : json({ error: "records officer only" }, 403);
+    if (purpose === "break-glass") return info.roles.includes("er-attending") ? standingPolicy("break-glass-standing", record) : json({ error: "er-attending only" }, 403);
     const r = state.requests.find((x) => x.id === url.searchParams.get("request"));
     if (!r || r.doctorUsername !== user) return json({ error: "this request names another doctor" }, 403);
-    return r.status === "AUTHORIZED" ? json({ policy: b64(r.recordId) }) : json({ error: `request is ${r.status}` }, 409);
+    if (r.status !== "AUTHORIZED") return json({ error: `request is ${r.status}` }, 409);
+    return json({ policy: policyB64({ subject: { type: "User", id: r.doctorKey }, recordId: r.recordId, access: "read", expiry: r.expiresAt }) });
   }
 
   if (p === "/api/emergency-requests") {
@@ -146,8 +157,8 @@ async function answer(user: string, info: { roles: string[]; approver: boolean }
       recordTitle: RECORDS.find((x) => x.id === r.recordId)?.title, tier: 2, subject: { type: "User", username: r.doctorUsername },
       roles: ["_tide_decryptor"], expiry: r.expiresAt,
       request: { id: r.id, purpose: r.purpose ?? "clinical", reason: r.reason, alertId: r.alertId, doctorUsername: r.doctorUsername, createdAt: r.createdAt, digest: r.digest, clarifications: r.clarifications ?? [] },
-      blockedReason: r.doctorUsername === user ? "the requesting doctor cannot approve their own request" : null,
-      changeRequest: { status: "PENDING", authorizationCount: (state.signers[r.changeRequestId] ?? []).length, threshold: 2, authorizers: (state.signers[r.changeRequestId] ?? []).map((u) => ({ username: u })) },
+      blockedReason: r.doctorUsername === user ? "the requesting doctor cannot approve their own request" : (state.signers[r.changeRequestId] ?? []).includes(user) ? "you have already signed this request" : null,
+      changeRequest: { status: "PENDING", authorizationCount: (state.signers[r.changeRequestId] ?? []).length, threshold: SIM_THRESHOLD, authorizers: (state.signers[r.changeRequestId] ?? []).map((u) => ({ username: u })) },
     }));
     return json({ items, tidecloak: { url: "http://localhost:8080", realm: "lifekey" } });
   }
@@ -234,8 +245,8 @@ async function answer(user: string, info: { roles: string[]; approver: boolean }
     if (method === "POST") return json({ attempt: { status: 200, body: { mode: "needs-approval" } }, before: 1, after: 1, recorded: false });
     return json({
       policies: [
-        ...grants().map((g) => ({ name: g.name, kind: g.spec.kind, recordId: g.spec.recordId, subject: g.spec.subject, access: g.spec.access, expiry: g.spec.expiry, policy: b64(g.spec.recordId) })),
-        { name: "lk-emergency-jit-MED-204-user-read-REQ-1042", kind: "emergency-jit", recordId: "MED-204", subject: { type: "User", id: KEYS["doctor-a"] }, access: "read", policy: b64(user === "doctor-a" ? "MED-204" : "") },
+        ...grants().map((g) => ({ name: g.name, kind: g.spec.kind, recordId: g.spec.recordId, subject: g.spec.subject, access: g.spec.access, expiry: g.spec.expiry, policy: policyB64(g.spec) })),
+        { name: "lk-emergency-jit-MED-204-user-read-REQ-1042", kind: "emergency-jit", recordId: "MED-204", subject: { type: "User", id: KEYS["doctor-a"] }, access: "read", policy: policyB64({ subject: { type: "User", id: KEYS["doctor-a"] }, recordId: "MED-204", access: "read", expiry: T0 + 5700 }) },
       ],
       ciphertexts: Object.fromEntries(RECORDS.map((r) => [r.id, `preview:${r.id}`])),
       requests: state.requests,

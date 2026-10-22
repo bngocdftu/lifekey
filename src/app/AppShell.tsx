@@ -120,7 +120,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <div className="bottom">
           {process.env.NEXT_PUBLIC_LIFEKEY_PREVIEW === "1" && (
             <div className="notice small">
-              Preview with sample data, no TideCloak. Switch account:{" "}
+              Preview with sample data. TideCloak is simulated: sign-in, roles and access checks run in this browser. Switch account:{" "}
               {["admin", "doctor-a", "doctor-b", "doctor-c", "patient-alice"].map((u, i) => (
                 <span key={u}>{i ? ", " : ""}<a className="link" href={`?as=${u}`}>{displayName(u)}</a></span>
               ))}

@@ -12,3 +12,4 @@ AGENTS.md
 branding/
 
 !data/tidecloak.json
+scripts/.init-run-snapshot.sh

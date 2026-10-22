@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { fmtTime, useApi } from "@/lib/client/api";
 import type { AuditEntry } from "@/lib/lifekey/audit";
 import { displayName } from "../AppShell";
-import { BarList, Columns, Donut, HashChain, type Bucket } from "../charts";
+import { BarList, Columns, Donut, HashChain, timeBuckets } from "../charts";
 
 // Actions as a clerk would write them in the ward book.
 const ACTION_TEXT: Record<string, string> = {
@@ -26,36 +26,16 @@ const ACTION_TEXT: Record<string, string> = {
   "policy.release.break-glass": "Lấy quyền mở khẩn cấp",
   "policy.release.request": "Lấy quyền đọc đã duyệt",
   "proof.server-approve": "Máy chủ thử tự duyệt",
+  "consent.sign": "Bệnh nhân ký đồng ý",
 };
 // Kinds of work, for the donut: grouped the way a ward would count them.
 const GROUPS: { key: string; label: string; color: string; match: (a: string) => boolean }[] = [
   { key: "read", label: "Đọc, ghi hồ sơ", color: "var(--teal)", match: (a) => a.startsWith("record.") || a === "patient.lookup" },
-  { key: "grant", label: "Quyền", color: "var(--green)", match: (a) => a.startsWith("grant.") || a.startsWith("policy.") },
+  { key: "grant", label: "Quyền", color: "var(--green)", match: (a) => a.startsWith("grant.") || a.startsWith("policy.") || a.startsWith("consent.") },
   { key: "request", label: "Xin quyền đọc", color: "var(--orange)", match: (a) => a.startsWith("request.") },
   { key: "bg", label: "Mở khẩn cấp", color: "var(--pink)", match: (a) => a.startsWith("break-glass.") },
   { key: "other", label: "Khác", color: "var(--grey)", match: () => true },
 ];
-
-/** Hourly buckets (wider when the log spans more than a day) from oldest to newest. */
-function bucketize(entries: AuditEntry[]): Bucket[] {
-  if (!entries.length) return [];
-  const ats = entries.map((e) => e.at);
-  const size = Math.max(3600, Math.ceil((Math.max(...ats) - Math.min(...ats) + 1) / 24 / 3600) * 3600);
-  const first = Math.floor(Math.min(...ats) / size) * size;
-  const n = Math.floor((Math.max(...ats) - first) / size) + 1;
-  return Array.from({ length: n }, (_, i) => {
-    const from = first + i * size;
-    const inside = entries.filter((e) => e.at >= from && e.at < from + size);
-    const ok = inside.filter((e) => e.outcome !== "denied" && e.outcome !== "error").length;
-    const bad = inside.length - ok;
-    const hour = new Date(from * 1000).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
-    return {
-      label: hour,
-      tip: `${fmtTime(from)}: ${ok} thành công, ${bad} bị từ chối`,
-      values: [{ key: "ok", value: ok, color: "var(--positive)" }, { key: "bad", value: bad, color: "var(--negative)" }],
-    };
-  });
-}
 
 const OUTCOME: Record<string, { text: string; cls: string }> = {
   ok: { text: "Thành công", cls: "pos" },
@@ -89,7 +69,7 @@ export default function AuditPage() {
   const deniedCount = (data?.entries ?? []).filter((e) => e.outcome === "denied" || e.outcome === "error").length;
 
   const all = data?.entries ?? [];
-  const buckets = bucketize(all);
+  const buckets = timeBuckets(all);
   const byActor = Object.entries(all.reduce<Record<string, number>>((m, e) => ({ ...m, [e.actor]: (m[e.actor] ?? 0) + 1 }), {}))
     .sort((a, b) => b[1] - a[1]);
   const groupCounts = GROUPS.map((g) => ({ key: g.key, label: g.label, color: g.color, value: all.filter((e) => GROUPS.find((x) => x.match(e.action))?.key === g.key).length }));

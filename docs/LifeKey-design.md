@@ -18,7 +18,7 @@
 Ba câu để nói với giám khảo:
 1. **Hack server LifeKey → chỉ lấy được ciphertext.**
 2. **Không một người nào, kể cả admin, tự mở được hồ sơ.**
-3. **Grant cho bác sĩ A dùng cho MED-204 thì không mở được MED-205, không dùng được cho bác sĩ D, và tự hết hạn.** Trang `/proof` chứng minh điều này trực tiếp trên mạng Tide.
+3. **Grant cho bác sĩ A dùng cho MED-204 thì không mở được MED-205, không dùng được cho người khác (kể cả chính bệnh nhân), và tự hết hạn.** Trang `/proof` chứng minh điều này trực tiếp trên mạng Tide.
 
 ## 1. Vấn đề và giới hạn thừa nhận
 
@@ -185,7 +185,7 @@ Mở sẵn 5 browser profile: admin, A, B, C, D.
 2. **(30s) Tier 1:** A quét QR → thấy ngay *warfarin 5 mg/ngày*, dị ứng penicillin, van tim cơ học.
 3. **(40s) Quorum:** A bấm *View source record* trên ALERT-88 → REQ-1042 cho MED-204. A thử giải mã: bị từ chối. B duyệt → `1/2`, A vẫn bị từ chối. C duyệt → `COMMITTED`. A giải mã được MED-204.
 4. **(30s) Phạm vi:** `/proof` với A: A2 (MED-205), A3 (Tier 3), A5 (ghi đè) đều bị **mạng Tide** từ chối, kèm thông báo của contract.
-5. **(20s) Người khác:** `/proof` với D: D1, dùng grant bị lộ của A → *subjectId does not match*.
+5. **(20s) Người khác:** `/proof` với bệnh nhân: P1, dùng grant bị lộ của A → *subjectId does not match*.
 6. **(30s) Break-glass:** "Giờ là 3 giờ sáng." A bấm Break glass, ghi lý do, đọc MED-204 ngay. B thấy trong hàng chờ rà soát.
 7. **(10s) Server không duyệt hộ được:** `/proof` S1.
 
@@ -200,9 +200,10 @@ Mở sẵn 5 browser profile: admin, A, B, C, D.
 | A5 | A | Ghi bằng grant chỉ-đọc | Từ chối | ORK (`roles`) |
 | A6 | A | Policy Tier 1 → đọc MED-204 | Từ chối | ORK (tag) |
 | A7 | A | Policy break-glass không khai báo | **Cho phép** (giới hạn đã biết) | — |
-| D1 | D | Dùng grant của A | Từ chối | ORK (subject) |
-| D2 | D | Break-glass khi không phải er-attending | Từ chối | ORK (role) |
-| D3 | D, A | Đọc Tier 1 | Cho phép | — |
+| A8 | A | Đọc Tier 1 | Cho phép | — |
+| P1 | Bệnh nhân | Dùng grant của A | Từ chối | ORK (subject) |
+| P2 | Bệnh nhân | Break-glass khi không phải er-attending | Từ chối | ORK (role) |
+| P3 | Bệnh nhân | Dùng policy Tier 1 của bác sĩ để đọc bản tóm tắt của mình | Từ chối | ORK (role) |
 | R1 | admin | Records officer đọc lại hồ sơ đã ghi | Từ chối | ORK (`roles` chỉ ghi) |
 | B1 | B, C | Approver đọc Tier 1 | Từ chối | ORK (không có role) |
 | S1 | bất kỳ | Server master-admin tự duyệt CR | Không được ghi nhận | TideCloak (cần enclave) |
@@ -235,6 +236,10 @@ Giới hạn thu hồi: plaintext đã xem, chụp hoặc tải xuống thì kh�
 - [ ] Xác nhận 3 điểm ở 6.3.
 - [ ] QR thật (`qrcode`) + Tier 0 trên thẻ.
 - [ ] Stretch: IPS/FHIR cho Tier 1, `lifekey-responder`, Forseti contract cho break-glass.
+- [ ] Đồng ý của bệnh nhân hiện do **app** kiểm soát (`src/lib/lifekey/consent.ts`, trang `/me`): LifeKey chỉ gửi quyền bệnh nhân đã ký và từ chối mở khẩn cấp khi bệnh nhân đã rút. Để **mạng** đòi chữ ký bệnh nhân cần một Forseti contract riêng (ví dụ kiểm tra attestation "patient consented" trước khi ký policy); contract tuỳ chỉnh do Tide team deploy.
+- [ ] Bệnh nhân rút đồng ý: LifeKey ngừng phát policy ngay, nhưng policy break-glass đã ký vẫn hợp lệ trên mạng tới khi hết hạn (30 ngày). Cân nhắc hạn ngắn hơn cho standing grant.
+- [ ] Bệnh nhân chưa tự đọc được hồ sơ của mình (không có policy nào cho tài khoản bệnh nhân). Thêm grant `User` = khoá Tide của bệnh nhân nếu cần.
+- [ ] Tài khoản bệnh nhân gắn với bệnh nhân bằng `PATIENT_ACCOUNTS` trong `catalogue.ts`; bản thật cần bước xác minh danh tính khi đăng ký.
 
 ## 12. Tham khảo
 

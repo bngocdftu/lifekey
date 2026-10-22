@@ -16,7 +16,7 @@ const NEXT: Record<string, { text: string; href: string; cta: string }> = {
   "doctor-a": { text: "Mở hồ sơ của Alice. Cảnh báo cấp cứu hiện ngay; hồ sơ chi tiết cần xin quyền.", href: `/emergency/${PATIENT.publicId}`, cta: "Mở hồ sơ bệnh nhân" },
   "doctor-b": { text: "Xem các yêu cầu đang chờ bạn ký và các lần mở khẩn cấp cần rà soát.", href: "/approve", cta: "Mở hàng chờ duyệt" },
   "doctor-c": { text: "Xem các yêu cầu đang chờ bạn ký và các lần mở khẩn cấp cần rà soát.", href: "/approve", cta: "Mở hàng chờ duyệt" },
-  "doctor-d": { text: "Thử dùng quyền đọc của Bác sĩ A. Mạng Tide phải từ chối bạn.", href: "/proof", cta: "Mở trang kiểm chứng" },
+  "patient-alice": { text: "Chọn hồ sơ nào bác sĩ cấp cứu được mở ngay, và xem ai đã xem hồ sơ của bạn.", href: "/me", cta: "Mở hồ sơ của tôi" },
 };
 
 const WAYS = [
@@ -33,6 +33,7 @@ const CAPS: { label: string; has: (me: Caller) => boolean }[] = [
   { label: "Đọc khi có quyền", has: (m) => m.realmRoles.includes("_tide_decryptor") },
   { label: "Ghi hồ sơ", has: (m) => m.realmRoles.includes("lifekey-recorder") },
   { label: "Duyệt yêu cầu", has: (m) => m.isApprover },
+  { label: "Ký đồng ý của mình", has: (m) => m.realmRoles.includes("lifekey-patient") },
 ];
 
 // A short to-do per demo account; "done" marks what the sample data already covers.
@@ -55,9 +56,11 @@ const STEPS: Record<string, { title: string; note: string; done?: boolean }[]> =
     { title: "Ký các yêu cầu đang chờ", note: "Một yêu cầu cần 2 trong 3 người duyệt" },
     { title: "Rà soát lần mở khẩn cấp", note: "Hạn 72 giờ sau khi mở" },
   ],
-  "doctor-d": [
-    { title: "Thử dùng quyền đọc của Bác sĩ A", note: "Mạng Tide phải từ chối bạn" },
-    { title: "Xem cảnh báo cấp cứu", note: "Bạn là bác sĩ đã xác minh nên xem được" },
+  "patient-alice": [
+    { title: "Ký đồng ý", note: "Chọn hồ sơ cho mở khẩn cấp và nội dung thẻ khẩn cấp" },
+    { title: "Xem ai đã mở hồ sơ của bạn", note: "Mỗi lần đọc, xin quyền và mở khẩn cấp đều hiện ở đây" },
+    { title: "Theo dõi lần mở khẩn cấp", note: "Hai người duyệt rà soát trong 72 giờ" },
+    { title: "Thử dùng quyền đọc của Bác sĩ A", note: "Trang Kiểm chứng: mạng Tide phải từ chối bạn" },
   ],
 };
 
@@ -65,6 +68,7 @@ const ROLE_TEXT: Record<string, string> = {
   "lifekey-clinician": "Bác sĩ đã xác minh",
   "er-attending": "Trực cấp cứu",
   "lifekey-recorder": "Nhập hồ sơ",
+  "lifekey-patient": "Bệnh nhân",
   _tide_decryptor: "Được đọc khi có quyền",
   _tide_encryptor: "Được ghi khi có quyền",
 };
@@ -79,8 +83,16 @@ export default function HomePage() {
   useEffect(() => {
     if (!authenticated) return;
     api<Caller>("/api/session", { method: "POST", body: {} }).then(setMe).catch((e) => setError(e.message));
-    api<{ entries: AuditEntry[] }>("/api/audit").then((d) => setLog(d.entries)).catch(() => undefined);
   }, [authenticated, api]);
+
+  // Staff see the ward's log; a patient only the entries about their own records.
+  useEffect(() => {
+    if (!me) return;
+    const patient = me.realmRoles.includes("lifekey-patient");
+    (patient ? api<{ audit: AuditEntry[] }>("/api/my-record").then((d) => d.audit) : api<{ entries: AuditEntry[] }>("/api/audit").then((d) => d.entries))
+      .then(setLog)
+      .catch(() => undefined);
+  }, [me, api]);
 
   if (isInitializing) return <p className="muted">Đang tải…</p>;
 
@@ -123,7 +135,7 @@ export default function HomePage() {
       <div className="title-row">
         <div>
           <h1>{me ? `Chào ${displayName(me.username)}` : "Tổng quan"}</h1>
-          <p className="sub">Khoa cấp cứu · bệnh viện mô phỏng</p>
+          <p className="sub">{me?.realmRoles.includes("lifekey-patient") ? "Hồ sơ cấp cứu của bạn · bệnh viện mô phỏng" : "Khoa cấp cứu · bệnh viện mô phỏng"}</p>
         </div>
       </div>
       {error && <p className="notice neg" style={{ marginBottom: 20 }}>Không tải được tài khoản: {error}</p>}
@@ -132,8 +144,8 @@ export default function HomePage() {
         <div className="chart-grid">
           <section className="panel span-8" aria-labelledby="act-h">
             <header>
-              <h2 id="act-h">Hoạt động 24 giờ qua</h2>
-              <span className="meta num">{perHour.reduce((a, b) => a + b, 0)} việc · <a className="link" href="/audit">Xem nhật ký</a></span>
+              <h2 id="act-h">{me?.realmRoles.includes("lifekey-patient") ? "Hoạt động trên hồ sơ của bạn" : "Hoạt động 24 giờ qua"}</h2>
+              <span className="meta num">{perHour.reduce((a, b) => a + b, 0)} việc trong 24 giờ · <a className="link" href={me?.realmRoles.includes("lifekey-patient") ? "/me" : "/audit"}>Xem nhật ký</a></span>
             </header>
             <AreaChart points={perHour} labels={hourLabels} label="Số việc trong nhật ký mỗi giờ, 24 giờ qua" />
           </section>
@@ -199,7 +211,7 @@ export default function HomePage() {
                 <div><dt>Khoá Tide:</dt><dd className="mono">{short(me.tideUserKey || "—", 6)}</dd></div>
                 <div><dt>Người duyệt:</dt><dd>{me.isApprover ? "Có" : "Không"}</dd></div>
               </dl>
-              <div style={{ marginTop: 14 }}>
+              {!me.realmRoles.includes("lifekey-patient") && <div style={{ marginTop: 14 }}>
                 <span className="small faint" style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
                   <span>Việc tài khoản này làm được</span><b className="num" style={{ color: "var(--text)" }}>{CAPS.filter((c) => c.has(me)).length}/{CAPS.length}</b>
                 </span>
@@ -208,7 +220,7 @@ export default function HomePage() {
                     <li key={c.label} className={c.has(me) ? "on" : "off"}><Icon name={c.has(me) ? "tick" : "x"} />{c.label}</li>
                   ))}
                 </ul>
-              </div>
+              </div>}
               <div className="inset" style={{ marginTop: 14 }}>
                 <span className="small faint" style={{ display: "block", marginBottom: 8 }}>Vai trò</span>
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>

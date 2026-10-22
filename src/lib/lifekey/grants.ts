@@ -4,7 +4,7 @@
 // Building and signing the policy bytes happens elsewhere (src/lib/tide/); this file decides WHAT
 // is granted, so the same rules drive the server, the approver screen and the tests.
 
-import { RECORDS, findRecord, type RecordMeta } from "./catalogue.ts";
+import { RECORDS, type RecordMeta } from "./catalogue.ts";
 
 export const ENCRYPT_ROLE = "_tide_encryptor";
 export const DECRYPT_ROLE = "_tide_decryptor";
@@ -13,6 +13,8 @@ export const DECRYPT_ROLE = "_tide_decryptor";
 export const ROLE_CLINICIAN = "lifekey-clinician";
 export const ROLE_ER_ATTENDING = "er-attending";
 export const ROLE_RECORDER = "lifekey-recorder";
+/** A patient: signs their own consent and sees who opened their records. Never a policy subject. */
+export const ROLE_PATIENT = "lifekey-patient";
 
 export type Access = "read" | "write";
 
@@ -72,9 +74,10 @@ export function policyName(spec: GrantSpec, requestId?: string): string {
   return requestId ? `${base}-${requestId}` : base;
 }
 
-export function validateGrant(spec: GrantSpec, now: number): string[] {
+/** `records` carries the patient's consent (applyConsent); without it, the catalogue defaults. */
+export function validateGrant(spec: GrantSpec, now: number, records: RecordMeta[] = RECORDS): string[] {
   const errors: string[] = [];
-  const record = findRecord(spec.recordId);
+  const record = records.find((r) => r.id === spec.recordId);
   if (!record) return [`unknown record ${spec.recordId}`];
   if (!spec.subject.id) errors.push("subject id is required");
 

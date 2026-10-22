@@ -8,6 +8,7 @@ import { policyMismatches, policyName, policyParams, standingGrants, validateGra
 import { applySignedPolicy, canApprove, createEmergencyRequest, effectiveStatus, requestDigest, type EmergencyRequest } from "./requests.ts";
 import { declareBreakGlass, isOverdue, reviewBreakGlass, type BreakGlassEvent } from "./breakglass.ts";
 import { appendAudit, verifyAuditChain, type AuditEntry } from "./audit.ts";
+import { applyConsent, consentChanges, recordConsent, TIER0_MAX_LENGTH, type ConsentInput, type PatientConsent } from "./consent.ts";
 
 const NOW = 1_800_000_000;
 const A_KEY = "a-key-hex";
@@ -65,7 +66,7 @@ test("request becomes AUTHORIZED only when the signed policy matches", () => {
   const r = pending();
   assert.equal(applySignedPolicy(r, signedPolicyFor(r), NOW + 10).status, "AUTHORIZED");
   const cases: Partial<DescribedPolicy>[] = [
-    { subjectId: "doctor-d-key" },
+    { subjectId: "someone-else-key" },
     { recordId: "MED-205" },
     { roles: '["_tide_encryptor","_tide_decryptor"]' },
     { expiry: r.expiresAt + 86400 },
@@ -143,4 +144,55 @@ test("audit chain detects an edited or removed entry", () => {
   assert.equal(verifyAuditChain(log), null);
   assert.equal(verifyAuditChain([log[0], log[2]]), 3, "entry 3 no longer follows entry 1");
   assert.equal(verifyAuditChain([log[0], { ...log[1], actor: "doctor-c" }, log[2]]), 2);
+});
+
+// ---- Patient consent (app-enforced; the quorum still signs the grants it leads to) ----
+
+function consentFor(input: Partial<ConsentInput> = {}, username = "patient-alice", prev?: PatientConsent) {
+  return recordConsent(prev, { breakGlass: ["MED-204"], tier0: { bloodType: "O+" }, ...input }, username, NOW);
+}
+
+test("consent: only the patient's own account signs it, and versions count up", () => {
+  assert.ok("errors" in consentFor({}, "doctor-a"));
+  const v1 = consentFor();
+  assert.ok("consent" in v1, JSON.stringify(v1));
+  assert.equal(v1.consent.patientId, "PAT-001");
+  assert.equal(v1.consent.version, 1);
+  const v2 = consentFor({ breakGlass: [] }, "patient-alice", v1.consent);
+  assert.ok("consent" in v2);
+  assert.equal(v2.consent.version, 2);
+  assert.deepEqual(consentChanges(v1.consent, v2.consent), { added: [], removed: ["MED-204"] });
+});
+
+test("consent: break-glass only on the patient's Tier 2 records, never Tier 1 or Tier 3", () => {
+  assert.ok("consent" in consentFor({ breakGlass: ["MED-204", "MED-205"] }));
+  assert.ok("errors" in consentFor({ breakGlass: ["PSY-301"] }));
+  assert.ok("errors" in consentFor({ breakGlass: ["T1-PAT-001"] }));
+  assert.ok("errors" in consentFor({ breakGlass: ["NOPE-1"] }));
+});
+
+test("consent: emergency card keeps only known, non-empty, short fields", () => {
+  const r = consentFor({ tier0: { bloodType: " O+ ", allergies: "", nickname: "x", implants: "y".repeat(500) } as never });
+  assert.ok("consent" in r);
+  assert.deepEqual(Object.keys(r.consent.tier0), ["bloodType", "implants"]);
+  assert.equal(r.consent.tier0.bloodType, "O+");
+  assert.ok(r.consent.tier0.implants!.length <= TIER0_MAX_LENGTH);
+});
+
+test("consent drives break-glass: no consent, no break-glass grant or declaration", () => {
+  const none = applyConsent(RECORDS, undefined);
+  assert.ok(none.every((r) => !r.breakGlassEligible));
+  assert.ok(!standingGrants(NOW, none).some((g) => g.kind === "break-glass-standing"));
+
+  const c = consentFor({ breakGlass: ["MED-205"] });
+  assert.ok("consent" in c);
+  const recs = applyConsent(RECORDS, c.consent);
+  const bg = standingGrants(NOW, recs).filter((g) => g.kind === "break-glass-standing").map((g) => g.recordId);
+  assert.deepEqual(bg, ["MED-205"]);
+  assert.deepEqual(validateGrant({ kind: "break-glass-standing", subject: { type: "Role", id: "er-attending" }, recordId: "MED-205", access: "read", expiry: NOW + 60 }, NOW, recs), []);
+  assert.ok(validateGrant({ kind: "break-glass-standing", subject: { type: "Role", id: "er-attending" }, recordId: "MED-204", access: "read", expiry: NOW + 60 }, NOW, recs).length > 0);
+
+  const input = { id: "BG-9", patientId: "PAT-001", doctorUsername: "doctor-a", doctorKey: A_KEY, doctorRoles: ["er-attending"], reason: "Unconscious, bleeding, anticoagulant unknown" };
+  assert.ok("errors" in declareBreakGlass({ ...input, recordId: "MED-204" }, [], NOW, recs));
+  assert.ok("event" in declareBreakGlass({ ...input, recordId: "MED-205" }, [], NOW, recs));
 });

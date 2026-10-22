@@ -36,6 +36,10 @@
         "description": "LifeKey: records officer. Subject of write-only policies: may encrypt records, cannot decrypt them."
       },
       {
+        "name": "lifekey-patient",
+        "description": "LifeKey: a patient. Signs their own consent and sees who opened their records. Never a policy subject, so the decrypt capability opens nothing for them."
+      },
+      {
         "name": "_tide_x.selfencrypt",
         "description": "Voucher gate only (enables the vendorsign voucher). Does not decide who reads anything."
       },

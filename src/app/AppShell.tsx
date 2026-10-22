@@ -13,24 +13,32 @@ const NAV = [
   { href: "/approve", label: "Duyệt yêu cầu", icon: "check", queue: true },
   { href: "/audit", label: "Nhật ký truy cập", icon: "list" },
 ] as const;
+// A patient sees their own record, never the ward's screens.
+const NAV_PATIENT = [
+  { href: "/", label: "Tổng quan", icon: "home" },
+  { href: "/me", label: "Hồ sơ của tôi", icon: "user" },
+  { href: "/proof", label: "Kiểm chứng", icon: "shield" },
+] as const;
 const NAV_ADMIN = [
   { href: "/setup", label: "Đăng ký bệnh nhân", icon: "plus" },
   { href: "/proof", label: "Kiểm chứng", icon: "shield" },
 ] as const;
 
 // Each person keeps one pale tint of their own hue, 60°+ apart.
-const PEOPLE_HUE: Record<string, number> = { admin: 150, "doctor-a": 200, "doctor-b": 30, "doctor-c": 280, "doctor-d": 340 };
+const PEOPLE_HUE: Record<string, number> = { admin: 150, "doctor-a": 200, "doctor-b": 30, "doctor-c": 280, "patient-alice": 100 };
 export function personTint(username: string) {
   const h = PEOPLE_HUE[username] ?? 100;
   return { background: `hsl(${h} 55% 92%)`, color: `hsl(${h} 45% 28%)` };
 }
 export function initials(username: string) {
   if (username === "admin") return "HS";
+  if (username === "patient-alice") return "AN";
   const m = username.match(/^doctor-([a-z])$/);
   return m ? m[1].toUpperCase() : username.slice(0, 1).toUpperCase();
 }
 export function displayName(username: string) {
   if (username === "admin") return "Phòng hồ sơ";
+  if (username === "patient-alice") return "Alice Nguyen";
   const m = username.match(/^doctor-([a-z])$/);
   return m ? `Bác sĩ ${m[1].toUpperCase()}` : username;
 }
@@ -47,7 +55,7 @@ function Mark() {
 }
 
 export function AppShell({ children }: { children: React.ReactNode }) {
-  const { authenticated, isInitializing, getValueFromIdToken, hasClientRole, login, logout } = useTideCloak();
+  const { authenticated, isInitializing, getValueFromIdToken, hasClientRole, hasRealmRole, login, logout } = useTideCloak();
   const api = useApi();
   const pathname = usePathname();
   const router = useRouter();
@@ -56,6 +64,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [query, setQuery] = useState("");
   const username: string = authenticated ? getValueFromIdToken("preferred_username") ?? "" : "";
   const isApprover = authenticated && hasClientRole("tide-realm-admin", "realm-management");
+  const isPatient = authenticated && hasRealmRole("lifekey-patient");
 
   // Record this user's Tide key server-side, so a later grant can name them.
   useEffect(() => {
@@ -69,7 +78,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   useEffect(() => setOpen(false), [pathname]);
 
-  const all = [...NAV, ...(isApprover ? NAV_ADMIN : [])];
+  const main = isPatient ? NAV_PATIENT : NAV;
+  const all = [...main, ...(isApprover ? NAV_ADMIN : [])];
   const current = all.find((n) => ("match" in n && n.match ? pathname.startsWith(n.match) : pathname === n.href));
 
   function search(e: React.FormEvent) {
@@ -97,10 +107,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <button className="btn ghost icon menu-toggle" style={{ marginLeft: "auto" }} onClick={() => setOpen(false)} aria-label="Đóng menu"><Icon name="close" /></button>
         </div>
         <div className="scope">
-          <b>Khoa cấp cứu</b>
+          <b>{isPatient ? "Hồ sơ cá nhân" : "Khoa cấp cứu"}</b>
           <span>Bệnh viện mô phỏng · dữ liệu giả lập</span>
         </div>
-        {NAV.map(item)}
+        {main.map(item)}
         {isApprover && (
           <>
             <div className="group-label">Quản trị</div>
@@ -111,7 +121,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           {process.env.NEXT_PUBLIC_LIFEKEY_PREVIEW === "1" && (
             <div className="notice small">
               Xem trước với dữ liệu mẫu, không có TideCloak. Đổi tài khoản:{" "}
-              {["admin", "doctor-a", "doctor-b", "doctor-c", "doctor-d"].map((u, i) => (
+              {["admin", "doctor-a", "doctor-b", "doctor-c", "patient-alice"].map((u, i) => (
                 <span key={u}>{i ? ", " : ""}<a className="link" href={`?as=${u}`}>{displayName(u)}</a></span>
               ))}
             </div>
@@ -122,7 +132,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <span className="avatar" style={personTint(username)}>{initials(username)}</span>
                 <div>
                   <b>{displayName(username)}</b>
-                  <span>{isApprover ? "Người duyệt" : username === "admin" ? "Nhập hồ sơ" : "Bác sĩ"}</span>
+                  <span>{isPatient ? "Bệnh nhân" : isApprover ? "Người duyệt" : username === "admin" ? "Nhập hồ sơ" : "Bác sĩ"}</span>
                 </div>
               </div>
               <button className="btn" onClick={logout}>Đăng xuất</button>
@@ -136,11 +146,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <header className="topbar">
         <button className="btn ghost icon menu-toggle" onClick={() => setOpen(true)} aria-label="Mở menu"><Icon name="menu" /></button>
         <span className="page-name">{current?.label ?? "LifeKey"}</span>
-        <form className="search" onSubmit={search} role="search">
-          <label htmlFor="patient-search" className="sr-only">Mã trên QR của bệnh nhân</label>
-          <input id="patient-search" placeholder="Tìm bệnh nhân theo mã QR, ví dụ p_8f29a1" value={query} onChange={(e) => setQuery(e.target.value)} />
-          <button className="search-go" type="submit" aria-label="Tìm"><Icon name="search" /></button>
-        </form>
+        {isPatient ? <span style={{ marginRight: "auto" }} /> : (
+          <form className="search" onSubmit={search} role="search">
+            <label htmlFor="patient-search" className="sr-only">Mã trên QR của bệnh nhân</label>
+            <input id="patient-search" placeholder="Tìm bệnh nhân theo mã QR, ví dụ p_8f29a1" value={query} onChange={(e) => setQuery(e.target.value)} />
+            <button className="search-go" type="submit" aria-label="Tìm"><Icon name="search" /></button>
+          </form>
+        )}
         <div className="right">
           {!authenticated && !isInitializing && <button className="btn primary" onClick={login}>Đăng nhập</button>}
         </div>

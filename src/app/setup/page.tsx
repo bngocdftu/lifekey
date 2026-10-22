@@ -4,6 +4,7 @@ import { useTideCloak } from "@tidecloak/nextjs";
 import { useCallback, useEffect, useState } from "react";
 import { PATIENT, RECORDS, SYNTHETIC_PLAINTEXT } from "@/lib/lifekey/catalogue";
 import { encryptRecord, fmtTime, networkReason, useApi } from "@/lib/client/api";
+import type { PatientConsent } from "@/lib/lifekey/consent";
 import { BarList, DotMatrix, Meter } from "../charts";
 import { Ring } from "../ui";
 
@@ -42,15 +43,19 @@ export default function SetupPage() {
   const api = useApi();
   const [rows, setRows] = useState<PolicyRow[]>([]);
   const [stored, setStored] = useState<string[]>([]);
+  const [consent, setConsent] = useState<PatientConsent | null>(null);
+  const [toFile, setToFile] = useState(0);
   const [log, setLog] = useState<{ id: string; ok: boolean; text: string; size?: number }[]>([]);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
-      const r = await api<{ policies: PolicyRow[]; ciphertexts: string[] }>("/api/setup");
+      const r = await api<{ policies: PolicyRow[]; ciphertexts: string[]; consent: PatientConsent | null; toFile: number }>("/api/setup");
       setRows(r.policies);
       setStored(r.ciphertexts);
+      setConsent(r.consent);
+      setToFile(r.toFile);
       setErr(null);
     } catch (e) {
       setErr((e as Error).message);
@@ -101,6 +106,7 @@ export default function SetupPage() {
   }
 
   const signed = rows.filter((r) => r.signed).length;
+  const bgIds = consent?.breakGlass ?? [];
   const allSigned = rows.length > 0 && signed === rows.length;
 
   return (
@@ -129,7 +135,7 @@ export default function SetupPage() {
         </div>
         <div className="kpi">
           <div className="kpi-label">Hồ sơ theo mức bảo vệ</div>
-          <div className="kpi-value">{RECORDS.length}<small>hồ sơ · {RECORDS.filter((r) => r.breakGlassEligible).length} cho mở khẩn cấp</small></div>
+          <div className="kpi-value">{RECORDS.length}<small>hồ sơ · {bgIds.length} cho mở khẩn cấp</small></div>
           <div className="kpi-chart">
             <BarList rows={[1, 2, 3].map((t) => ({ key: String(t), label: TIER_LOOK[t].label, value: RECORDS.filter((r) => r.tier === t).length, color: TIER_LOOK[t].color }))} />
           </div>
@@ -148,7 +154,7 @@ export default function SetupPage() {
               if (col === "recorder") return { color, tip: `Phòng hồ sơ ghi được ${id} nhưng không đọc lại được`, hollow: true };
               if (col === "clinician" && r.tier === 1) return { color, tip: `Mọi bác sĩ đã xác minh đọc được ${id}` };
               if (col === "jit" && r.tier === 2) return { color, tip: `Một bác sĩ đọc được ${id} khi đủ 2 chữ ký, trong 2 giờ` };
-              if (col === "bg" && r.breakGlassEligible) return { color, tip: `Bác sĩ trực mở khẩn cấp được ${id}, có rà soát sau` };
+              if (col === "bg" && bgIds.includes(r.id)) return { color, tip: `Bác sĩ trực mở khẩn cấp được ${id}, có rà soát sau` };
               return null;
             }} />
           <p className="small faint" style={{ marginTop: 10 }}>Ô đặc: được đọc. Ô rỗng: chỉ được ghi.</p>
@@ -166,8 +172,17 @@ export default function SetupPage() {
       <div className="setting">
         <div>
           <h2>Bệnh nhân đồng ý những gì</h2>
-          <p className="desc">Mỗi điều bệnh nhân đồng ý trở thành một quyền. Quyền chỉ có hiệu lực khi người duyệt ký. Sau khi gửi, Bác sĩ B và C ký ở trang Duyệt yêu cầu.</p>
-          <p style={{ marginTop: 16 }}><button className="btn primary" disabled={busy || rows.length > 0} onClick={enroll}>{rows.length ? "Đã gửi cho người duyệt" : "Gửi cho người duyệt"}</button></p>
+          <p className="desc">Bệnh nhân ký đồng ý từ tài khoản của mình. Mỗi điều bệnh nhân đồng ý trở thành một quyền, và quyền chỉ có hiệu lực khi người duyệt ký. Sau khi gửi, Bác sĩ B và C ký ở trang Duyệt yêu cầu.</p>
+          <div className={`notice ${consent ? "acc" : "warn"}`} style={{ marginTop: 16 }}>
+            {consent
+              ? <>Bệnh nhân đã ký phiên bản {consent.version} lúc {fmtTime(consent.signedAt)}. Cho mở khẩn cấp: <b>{bgIds.join(", ") || "không hồ sơ nào"}</b>.</>
+              : "Chờ bệnh nhân ký đồng ý ở trang Hồ sơ của tôi. Chưa gửi được quyền nào."}
+          </div>
+          <p style={{ marginTop: 16 }}>
+            <button className="btn primary" disabled={busy || !consent || (rows.length > 0 && toFile === 0)} onClick={enroll}>
+              {!rows.length ? "Gửi cho người duyệt" : toFile ? `Gửi thêm ${toFile} quyền` : "Đã gửi cho người duyệt"}
+            </button>
+          </p>
         </div>
         <div className="panel flush as-list">
           <div className="table-wrap">

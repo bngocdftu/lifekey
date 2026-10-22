@@ -1,7 +1,7 @@
 import { withAuth } from "@/lib/auth/protect";
 import { callerFrom, json } from "@/lib/auth/caller";
 import { declareBreakGlass, isOverdue } from "@/lib/lifekey/breakglass.ts";
-import { audit, nowSeconds, withStore } from "@/lib/lifekey/store.ts";
+import { audit, consentedRecords, nowSeconds, withStore } from "@/lib/lifekey/store.ts";
 
 // Declare break-glass. The policy is released by /api/policies?purpose=break-glass afterwards, and
 // only for one hour after declaring.
@@ -22,6 +22,7 @@ export const POST = withAuth(async (req, jwt) => {
       },
       Object.values(s.breakGlass),
       nowSeconds(),
+      consentedRecords(s),
     );
     if ("errors" in r) {
       audit(s, { actor: caller.username, action: "break-glass.declare", resource: String(body.recordId), outcome: "denied", detail: r.errors.join("; ") });

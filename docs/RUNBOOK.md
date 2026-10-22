@@ -9,12 +9,12 @@ npm install
 npm run preview      # http://localhost:3100
 ```
 
-Chế độ này thay SDK Tide bằng bản giả và dùng dữ liệu mẫu, chỉ để xem giao diện. Đổi tài khoản bằng `?as=doctor-a` (hoặc `admin`, `doctor-b`, `doctor-c`, `doctor-d`), hoặc bấm tên ở góc dưới thanh bên trái. Kết quả trang Kiểm chứng trong chế độ này **không** chứng minh gì, vì không có mạng Tide thật.
+Chế độ này thay SDK Tide bằng bản giả và dùng dữ liệu mẫu, chỉ để xem giao diện. Đổi tài khoản bằng `?as=doctor-a` (hoặc `admin`, `doctor-b`, `doctor-c`, `patient-alice`), hoặc bấm tên ở góc dưới thanh bên trái. Kết quả trang Kiểm chứng trong chế độ này **không** chứng minh gì, vì không có mạng Tide thật.
 
 ## 0. Cần có
 
 - Docker Desktop (macOS), Node 20+, `jq`, `curl` (`brew install jq`)
-- **5 browser profile** (Chrome → Add profile), mỗi profile một tài khoản Tide riêng: `admin`, `doctor-a`, `doctor-b`, `doctor-c`, `doctor-d`
+- **5 browser profile** (Chrome → Add profile), mỗi profile một tài khoản Tide riêng: `admin`, `doctor-a`, `doctor-b`, `doctor-c`, `patient-alice` (licence cho tối đa 5 tài khoản)
 - Hỏi Tide team (Discord https://discord.gg/XBMd9ny2q5) xem mạng của `tideorg/tidecloak-dev` đã có contract **`RelationshipAttestation:1`** chưa (ORK build từ 16/10/2026). Nếu chưa có thì dừng ở đây.
 
 ## 1. Khởi tạo
@@ -49,8 +49,9 @@ Trong TideCloak admin console (`http://localhost:8080/admin/master/console/#/lif
 
 Kiểm tra: ở trang chủ LifeKey, B và C hiện badge **tide-realm-admin (approver)**. `doctor-a` **không bao giờ** được cấp role này.
 
-## 4. Enrollment (profile `admin`)
+## 4. Enrollment (profile `patient-alice`, rồi `admin`)
 
+0. Profile `patient-alice` → `/me` → **Đồng ý của tôi**: bật "Cho mở khẩn cấp" cho MED-204, chọn nội dung thẻ khẩn cấp → **Ký đồng ý**. Chưa ký thì `/setup` không gửi được quyền nào.
 1. `/setup` → **1. Gửi standing grants cho quorum**: tạo 6 change request (4 grant ghi, 1 Tier 1, 1 break-glass).
 2. Profile B → `/approve` → chọn tất cả → **Duyệt** (một pop-up cho cả lô) → mỗi mục `1/2`.
 3. Profile C → `/approve` → **Duyệt** → `COMMITTED`.
@@ -68,12 +69,14 @@ Kiểm tra: ở trang chủ LifeKey, B và C hiện badge **tide-realm-admin (ap
 | 5 | A | Làm mới | Vẫn `PENDING_APPROVAL`: một chữ ký chưa đủ |
 | 6 | C | `/approve` → duyệt | `COMMITTED` |
 | 7 | A | Làm mới → **Giải mã** MED-204 | Danh sách thuốc |
-| 8 | A | `/proof` → chạy | A1 PASS (cho phép); A2–A6 PASS (bị từ chối); A7 cho phép (giới hạn đã biết) |
-| 9 | D | `/proof` → chạy | D1, D2 bị từ chối; D3 cho phép |
+| 8 | A | `/proof` → chạy | A1 PASS (cho phép); A2–A6 PASS (bị từ chối); A7 cho phép (giới hạn đã biết); A8 cho phép (xem cảnh báo) |
+| 9 | patient-alice | `/proof` → chạy | P1 (dùng grant của A: *subjectId does not match*), P2, P3 bị từ chối |
 | 10 | A | MED-204 → **Break glass** → lý do | Đọc được ngay; B/C thấy mục cần rà soát |
 | 11 | B, C | `/approve` → rà soát | `JUSTIFIED` hoặc `FLAGGED` |
 | 12 | admin, B | `/proof` | R1, B1 bị từ chối; S1: server không ghi được chữ ký |
 | 13 | bất kỳ | `/audit` | Chuỗi hash nguyên vẹn |
+| 14 | patient-alice | `/me` | Ai đã đọc hồ sơ, thông báo mở khẩn cấp ở bước 10, quyền REQ-1042 đang còn bao lâu |
+| 15 | patient-alice | `/me` → tắt MED-204 → ký phiên bản 2 | Bước 10 làm lại bị từ chối ở LifeKey; quyền đã ký trên mạng vẫn còn tới khi hết hạn |
 
 Thử hết hạn: tạo request mới, để hết hạn (hoặc sửa `DEFAULT_TTL_SECONDS` trong `src/app/api/emergency-requests/route.ts` xuống 120 giây), rồi chạy lại A1. Mong đợi: bị từ chối.
 

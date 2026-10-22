@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { fmtTime } from "@/lib/client/api";
 
 // Small charts drawn with plain HTML/SVG and the theme tokens, no chart library. Every chart keeps
 // one scale, recessive grid lines, thin marks and a native tooltip (<title> or title=) per mark.
@@ -181,6 +182,26 @@ export interface Bucket {
   label: string;
   tip: string;
   values: { key: string; value: number; color: string }[];
+}
+
+/** Hourly buckets (wider when the entries span more than a day), oldest first, split ok / refused. */
+export function timeBuckets(entries: { at: number; outcome: string }[]): Bucket[] {
+  if (!entries.length) return [];
+  const ats = entries.map((e) => e.at);
+  const size = Math.max(3600, Math.ceil((Math.max(...ats) - Math.min(...ats) + 1) / 24 / 3600) * 3600);
+  const first = Math.floor(Math.min(...ats) / size) * size;
+  const n = Math.floor((Math.max(...ats) - first) / size) + 1;
+  return Array.from({ length: n }, (_, i) => {
+    const from = first + i * size;
+    const inside = entries.filter((e) => e.at >= from && e.at < from + size);
+    const bad = inside.filter((e) => e.outcome === "denied" || e.outcome === "error").length;
+    const ok = inside.length - bad;
+    return {
+      label: new Date(from * 1000).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
+      tip: `${fmtTime(from)}: ${ok} thành công, ${bad} bị từ chối`,
+      values: [{ key: "ok", value: ok, color: "var(--positive)" }, { key: "bad", value: bad, color: "var(--negative)" }],
+    };
+  });
 }
 
 /** Stacked columns over time, bottom-anchored, with a 2px surface gap between segments. */

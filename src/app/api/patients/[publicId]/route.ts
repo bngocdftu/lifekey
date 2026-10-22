@@ -1,9 +1,9 @@
 import { NextRequest } from "next/server";
 import { withAuth } from "@/lib/auth/protect";
 import { callerFrom, json } from "@/lib/auth/caller";
-import { PATIENT, RECORDS } from "@/lib/lifekey/catalogue.ts";
+import { PATIENT } from "@/lib/lifekey/catalogue.ts";
 import { ROLE_CLINICIAN, ROLE_RECORDER } from "@/lib/lifekey/grants.ts";
-import { audit, readStore, withStore } from "@/lib/lifekey/store.ts";
+import { audit, consentedRecords, readStore, withStore } from "@/lib/lifekey/store.ts";
 
 // What scanning the QR resolves to: record metadata and ciphertext. Never plaintext.
 //
@@ -24,6 +24,6 @@ export const GET = withAuth(async (req: NextRequest, jwt) => {
   return json({
     found: true,
     patient: PATIENT,
-    records: RECORDS.map((r) => ({ ...r, ciphertext: store.ciphertexts[r.id]?.ciphertext ?? null })),
+    records: consentedRecords(store).filter((r) => r.patientId === PATIENT.id).map((r) => ({ ...r, ciphertext: store.ciphertexts[r.id]?.ciphertext ?? null })),
   });
 });

@@ -12,7 +12,7 @@ const USERS: Record<string, { roles: string[]; approver: boolean }> = {
   "doctor-a": { roles: ["lifekey-clinician", "er-attending", "_tide_decryptor"], approver: false },
   "doctor-b": { roles: [], approver: true },
   "doctor-c": { roles: [], approver: true },
-  "doctor-d": { roles: ["lifekey-clinician", "_tide_decryptor"], approver: false },
+  "patient-alice": { roles: ["lifekey-patient", "_tide_decryptor"], approver: false },
 };
 
 function currentUser(): string {

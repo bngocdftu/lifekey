@@ -1,9 +1,12 @@
 import { withAuth } from "@/lib/auth/protect";
 import { callerFrom, json } from "@/lib/auth/caller";
 import { verifyAuditChain } from "@/lib/lifekey/audit.ts";
+import { ROLE_PATIENT } from "@/lib/lifekey/grants.ts";
 import { audit, readStore, withStore } from "@/lib/lifekey/store.ts";
 
-export const GET = withAuth(async () => {
+export const GET = withAuth(async (_req, jwt) => {
+  // The ward's whole log is staff-only. A patient reads their own entries from /api/my-record.
+  if (callerFrom(jwt).realmRoles.includes(ROLE_PATIENT)) return json({ error: "staff only; patients see their own log" }, 403);
   const log = readStore().audit;
   return json({ entries: [...log].reverse(), brokenAt: verifyAuditChain(log), head: log.at(-1)?.hash ?? null });
 });

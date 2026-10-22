@@ -4,6 +4,8 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   // The dev badge sits over content on a phone; it adds nothing to a demo.
   devIndicators: false,
+  // Let another device on the same hotspot or LAN open the dev/preview server.
+  allowedDevOrigins: ["10.*.*.*", "172.16.*.*", "192.168.*.*"],
   // Next.js 16+ defaults to Turbopack. Use `next dev --webpack` (in package.json)
   // because @tidecloak/* packages need the webpack workarounds below.
   webpack: (config) => {

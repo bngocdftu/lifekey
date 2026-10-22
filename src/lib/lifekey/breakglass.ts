@@ -5,7 +5,7 @@
 // `er-attending`. At incident time nobody has to be found: the network checks the doctor holds the
 // role, and this module makes the use visible: reason, notifications, and a mandatory review.
 
-import { findRecord } from "./catalogue.ts";
+import { RECORDS, type RecordMeta } from "./catalogue.ts";
 import { ROLE_ER_ATTENDING } from "./grants.ts";
 
 export const MIN_REASON_LENGTH = 15;
@@ -55,9 +55,11 @@ export function declareBreakGlass(
   input: DeclareInput,
   history: BreakGlassEvent[],
   now: number,
+  /** The catalogue as the patient's consent leaves it (applyConsent). */
+  records: RecordMeta[] = RECORDS,
 ): { event: BreakGlassEvent } | { errors: string[] } {
   const errors: string[] = [];
-  const record = findRecord(input.recordId);
+  const record = records.find((r) => r.id === input.recordId);
   if (!record) return { errors: [`unknown record ${input.recordId}`] };
   if (record.patientId !== input.patientId) errors.push(`${input.recordId} does not belong to ${input.patientId}`);
   if (record.tier === 3) errors.push("Tier 3 is never opened by break-glass");

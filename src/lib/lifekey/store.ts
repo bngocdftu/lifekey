@@ -5,6 +5,8 @@ import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { appendAudit, type AuditEntry } from "./audit.ts";
 import type { BreakGlassEvent } from "./breakglass.ts";
+import { applyConsent, type PatientConsent } from "./consent.ts";
+import { RECORDS, type RecordMeta } from "./catalogue.ts";
 import type { GrantSpec } from "./grants.ts";
 import type { EmergencyRequest } from "./requests.ts";
 
@@ -31,6 +33,8 @@ export interface StoreShape {
   policies: Record<string, StoredPolicy>;
   requests: Record<string, EmergencyRequest>;
   breakGlass: Record<string, BreakGlassEvent>;
+  /** patientId -> the latest consent the patient signed. Earlier versions live on in the audit log. */
+  consents: Record<string, PatientConsent>;
   /** username -> tideuserkey, recorded at sign-in so a grant can name the user later. */
   users: Record<string, { tideUserKey: string; roles: string[]; lastSeen: number }>;
   audit: AuditEntry[];
@@ -40,7 +44,7 @@ export interface StoreShape {
 const FILE = join(process.cwd(), "data", "lifekey-store.json");
 
 function empty(): StoreShape {
-  return { ciphertexts: {}, policies: {}, requests: {}, breakGlass: {}, users: {}, audit: [], counters: { request: 1041, breakGlass: 0 } };
+  return { ciphertexts: {}, policies: {}, requests: {}, breakGlass: {}, consents: {}, users: {}, audit: [], counters: { request: 1041, breakGlass: 0 } };
 }
 
 function load(): StoreShape {
@@ -70,6 +74,11 @@ export function withStore<T>(fn: (s: StoreShape) => T | Promise<T>): Promise<T> 
 
 export function readStore(): StoreShape {
   return load();
+}
+
+/** The catalogue as the patients' consents leave it: break-glass only where a patient agreed. */
+export function consentedRecords(s: StoreShape): RecordMeta[] {
+  return RECORDS.flatMap((r) => applyConsent([r], s.consents[r.patientId]));
 }
 
 export function nowSeconds(): number {

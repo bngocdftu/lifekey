@@ -19,8 +19,9 @@ export interface RecordMeta {
   title: string;
   category: string;
   /**
-   * The patient pre-authorised break-glass reading of this record at enrollment. Only Tier 2 may
-   * be eligible: Tier 3 always needs its own legal basis.
+   * Break-glass may open this record. The values below are only the suggested defaults the consent
+   * form starts from; what counts is the patient's signed consent (consent.ts, applyConsent).
+   * Only Tier 2 may be eligible: Tier 3 always needs its own legal basis.
    */
   breakGlassEligible: boolean;
 }
@@ -49,6 +50,9 @@ export const RECORDS: RecordMeta[] = [
   { id: "MED-205", patientId: "PAT-001", tier: 2, title: "Tiền sử phẫu thuật", category: "surgical_history", breakGlassEligible: false },
   { id: "PSY-301", patientId: "PAT-001", tier: 3, title: "Hồ sơ sức khoẻ tâm thần", category: "mental_health", breakGlassEligible: false },
 ];
+
+/** Which patient each patient account is. The account signs that patient's consent and sees their log. */
+export const PATIENT_ACCOUNTS: Record<string, string> = { "patient-alice": "PAT-001" };
 
 export function findRecord(recordId: string): RecordMeta | undefined {
   return RECORDS.find((r) => r.id === recordId);

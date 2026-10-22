@@ -2,6 +2,7 @@
 // event and a short audit trail, all synthetic. Held in memory for the life of the page.
 
 import { PATIENT, RECORDS } from "@/lib/lifekey/catalogue";
+import { applyConsent, consentChanges, recordConsent, type PatientConsent } from "@/lib/lifekey/consent";
 import { policyName, standingGrants } from "@/lib/lifekey/grants";
 
 const now = () => Math.floor(Date.now() / 1000);
@@ -10,7 +11,7 @@ const b64 = (s: string) => btoa(s);
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 
 const KEYS: Record<string, string> = {
-  admin: "7f3a9c01e44b2d8a", "doctor-a": "a91c5e7742d0b6f3", "doctor-b": "b2d84f10c9e3a771", "doctor-c": "c0e7a2b95d14f863", "doctor-d": "d45b1e8c03a9f27e",
+  admin: "7f3a9c01e44b2d8a", "doctor-a": "a91c5e7742d0b6f3", "doctor-b": "b2d84f10c9e3a771", "doctor-c": "c0e7a2b95d14f863", "patient-alice": "e81f3a6c27d09b45",
 };
 
 const state = {
@@ -22,20 +23,26 @@ const state = {
     { id: "BG-1", patientId: PATIENT.id, recordId: "MED-204", doctorUsername: "doctor-a", doctorKey: KEYS["doctor-a"], reason: "Bệnh nhân bất tỉnh, đang chảy máu, cần biết thuốc chống đông", declaredAt: T0 - 5 * 3600, reviewDueAt: T0 + 67 * 3600, notified: ["patient", "emergency-contact", "on-call-approvers", "privacy-officer"], reviews: [{ reviewer: "doctor-c", decision: "justified", note: "Có ghi nhận chảy máu trong bệnh án lúc 03:10", at: T0 - 3600 }], status: "AWAITING_REVIEW" },
   ] as Record<string, any>[],
   signers: { "cr-1043": ["doctor-b"] } as Record<string, string[]>,
+  consent: {
+    patientId: PATIENT.id, version: 1, signedBy: "patient-alice", signedAt: T0 - 27000, breakGlass: ["MED-204"],
+    tier0: { bloodType: "O+", allergies: "Penicillin (sốc phản vệ)", implants: "Van tim cơ học", emergencyContact: "Bob Nguyen (giả lập), 0900 000 000" },
+  } as PatientConsent | null,
   audit: [] as Record<string, any>[],
 };
 
 const AUDIT_SEED: [number, string, string, string, string, string?][] = [
+  [-27000, "patient-alice", "consent.sign", "PAT-001", "ok", "v1: mở khẩn cấp MED-204; thẻ khẩn cấp: bloodType, allergies, implants, emergencyContact"],
   [-26000, "admin", "grant.file", "T1-PAT-001", "ok", "Bác sĩ đã xác minh xem cảnh báo cấp cứu"],
   [-25000, "lifekey-server", "grant.signed", "T1-PAT-001", "ok", "Đủ 2 chữ ký"],
   [-24800, "admin", "record.write", "MED-204", "ok", "3.412 ký tự mã hoá"],
+  [-18060, "doctor-a", "patient.lookup", "PAT-001", "ok", "via QR public id"],
   [-18000, "doctor-a", "break-glass.declare", "MED-204", "ok", "Bệnh nhân bất tỉnh, đang chảy máu"],
   [-17990, "doctor-a", "record.decrypt", "MED-204", "ok", "client-reported: mở khẩn cấp"],
   [-3600, "doctor-c", "break-glass.review", "MED-204", "ok", "Hợp lý"],
   [-1500, "doctor-a", "request.create", "MED-204", "ok", "REQ-1042"],
   [-1200, "lifekey-server", "request.status", "MED-204", "ok", "REQ-1042 đã đủ 2 chữ ký"],
   [-1100, "doctor-a", "record.decrypt", "MED-204", "ok", "client-reported: theo REQ-1042"],
-  [-900, "doctor-d", "record.decrypt", "MED-204", "denied", "client-reported: subjectId does not match."],
+  [-900, "patient-alice", "record.decrypt", "MED-204", "denied", "client-reported: subjectId does not match."],
   [-420, "doctor-a", "request.create", "MED-205", "ok", "REQ-1043"],
   [-300, "lifekey-server", "proof.server-approve", "cr-1043", "denied", "Chữ ký 1 → 1"],
 ];
@@ -43,8 +50,10 @@ AUDIT_SEED.forEach(([dt, actor, action, resource, outcome, detail], i) =>
   state.audit.push({ seq: i + 1, at: T0 + dt, actor, action, resource, outcome, detail, prevHash: "", hash: "" }),
 );
 
+const consented = () => applyConsent(RECORDS, state.consent ?? undefined);
+
 function grants() {
-  return standingGrants(T0 - 26000).map((spec) => ({ name: policyName(spec), spec, changeRequestId: `cr-${spec.recordId}`, status: "SIGNED", signed: true }));
+  return standingGrants(T0 - 26000, consented()).map((spec) => ({ name: policyName(spec), spec, changeRequestId: `cr-${spec.recordId}`, status: "SIGNED", signed: true }));
 }
 
 function caller(user: string, info: { roles: string[]; approver: boolean }) {
@@ -78,7 +87,7 @@ export async function previewFetch(user: string, info: { roles: string[]; approv
 
   if (p.startsWith("/api/patients/")) {
     if (p.split("/").pop() !== PATIENT.publicId) return json({ found: false, message: "No previous medical records available" }, 404);
-    return json({ found: true, patient: PATIENT, records: RECORDS.map((r) => ({ ...r, ciphertext: `preview:${r.id}` })) });
+    return json({ found: true, patient: PATIENT, records: consented().map((r) => ({ ...r, ciphertext: `preview:${r.id}` })) });
   }
 
   if (p === "/api/policies") {
@@ -134,10 +143,39 @@ export async function previewFetch(user: string, info: { roles: string[]; approv
 
   if (p === "/api/audit") {
     if (method === "POST") return json({ ok: true });
+    if (info.roles.includes("lifekey-patient")) return json({ error: "staff only; patients see their own log" }, 403);
     return json({ entries: [...state.audit].reverse(), brokenAt: null, head: "3f9a0c" });
   }
 
-  if (p === "/api/setup") return json({ policies: grants(), ciphertexts: RECORDS.map((r) => r.id) });
+  if (p === "/api/setup") {
+    const filed = new Set(standingGrants(T0 - 26000, applyConsent(RECORDS, { ...state.consent!, breakGlass: ["MED-204"] })).map((g) => policyName(g)));
+    const toFile = state.consent ? standingGrants(T0, consented()).filter((g) => !filed.has(policyName(g))).length : 0;
+    return json({ policies: grants().filter((g) => filed.has(g.name)), ciphertexts: RECORDS.map((r) => r.id), consent: state.consent, toFile });
+  }
+
+  if (p === "/api/consent" && method === "POST") {
+    if (!info.roles.includes("lifekey-patient")) return json({ error: "patients only" }, 403);
+    const r = recordConsent(state.consent ?? undefined, { breakGlass: body.breakGlass ?? [], tier0: body.tier0 ?? {} }, user, now());
+    if ("errors" in r) return json(r, 400);
+    const { added, removed } = consentChanges(state.consent ?? undefined, r.consent);
+    state.consent = r.consent;
+    state.audit.push({ seq: state.audit.length + 1, at: now(), actor: user, action: "consent.sign", resource: PATIENT.id, outcome: "ok", detail: `v${r.consent.version}`, prevHash: "", hash: "" });
+    return json({ consent: r.consent, added, removed, stillSigned: removed.filter((id) => id === "MED-204") }, 201);
+  }
+
+  if (p === "/api/my-record") {
+    if (!info.roles.includes("lifekey-patient")) return json({ error: "patients only" }, 403);
+    const ids = new Set([...RECORDS.map((r) => r.id), PATIENT.id]);
+    return json({
+      patient: PATIENT,
+      consent: state.consent,
+      records: consented().map((r) => ({ ...r, stored: true })),
+      requests: state.requests.map(({ id, recordId, doctorUsername, reason, createdAt, expiresAt, status }) => ({ id, recordId, doctorUsername, reason, createdAt, expiresAt, status })),
+      breakGlass: state.breakGlass.map((e) => ({ ...e, overdue: now() > e.reviewDueAt })),
+      standing: grants().map((g) => ({ name: g.name, kind: g.spec.kind, recordId: g.spec.recordId, subject: g.spec.subject.id, access: g.spec.access, expiry: g.spec.expiry, status: "SIGNED" })),
+      audit: [...state.audit].reverse().filter((e) => ids.has(e.resource)),
+    });
+  }
 
   if (p === "/api/proof") {
     if (method === "POST") return json({ attempt: { status: 200, body: { mode: "needs-approval" } }, before: 1, after: 1, recorded: false });

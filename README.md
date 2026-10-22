@@ -1,20 +1,37 @@
 # LifeKey
 
-**Emergency doctors see the alerts that keep a patient alive immediately, while the full record opens only for one named doctor, one record and a short time, approved by two people and enforced by the Tide network rather than by our server.**
+**Emergency doctors see the alerts that keep a patient alive at once; the full record opens only for one named doctor, one record and a short time, approved by two people and enforced by the Tide network, not our server.**
 
 <!-- Project overview: 300 words or fewer. Replace the headings below with the organisers' template if they differ. -->
 
-**The possibility.** An unconscious patient arrives at 3 a.m. The ER doctor needs to know about warfarin, a penicillin allergy and a mechanical heart valve now, and sometimes needs the full medication history too, without anyone being able to browse every record "just in case".
+**The possibility.** An unconscious patient arrives at 3 a.m. The ER doctor needs to know about warfarin, a penicillin allergy and a mechanical heart valve now, and sometimes the full medication list, without anyone browsing every record "just in case".
 
-**The constraint.** In today's systems whoever runs the server, or holds an admin account, can read or grant access to everything. Patients and hospitals cannot share detailed records widely because one compromised server or one insider exposes all of them, and "break-the-glass" is only a checkbox an admin can bypass.
+**The constraint.** Today whoever runs the server or holds an admin account can read or grant access to everything. One compromised server or one insider exposes every patient, and "break-the-glass" is a checkbox an admin can bypass.
 
-**The prototype and TideCloak's role.** Every record is encrypted on its own. Each read grant is a TideCloak policy (`RelationshipAttestation:1`) that names one doctor's Tide key, one record and an expiry, and it only exists once two approvers sign it through TideCloak's quorum. The Tide network checks doctor, record, operation and expiry on every decryption. Emergency summaries are pre-approved for verified clinicians; break-glass opens only records the patient pre-authorised, for on-duty ER doctors, with mandatory review afterwards.
+**The prototype and TideCloak's role.** Every record is encrypted on its own. A read grant is a TideCloak policy (`RelationshipAttestation:1`) naming one doctor's Tide key, one record and an expiry; it exists only once two approvers sign it through TideCloak's quorum, and the Tide network checks doctor, record, operation and expiry on every decryption. Emergency summaries are pre-approved for verified clinicians; break-glass opens only records the patient pre-authorised, for on-duty ER doctors, with review afterwards.
 
-**Why ordinary login is not enough.** With normal login and backend permissions, our server would hold the keys and decide who reads what. Here the server only stores ciphertext and cannot sign a grant: a leaked grant fails for another doctor, a MED-204 grant cannot open MED-205, and the server cannot approve on anyone's behalf. The `/proof` page runs these checks live.
+**Why ordinary login is not enough.** With normal login our server would hold the keys and decide who reads what. Here it stores only ciphertext and cannot sign a grant: a leaked grant fails for anyone else, a MED-204 grant cannot open MED-205, and the server cannot approve for anyone.
 
-**What changes.** Patients can let emergency teams see what matters without exposing everything. Hospitals can prove that no single admin, server or AI can open a record alone.
+**What changes.** Patients let emergency teams see what matters without exposing everything, and hospitals can show that no single admin, server or AI can open a record alone.
 
-Synthetic data only. Demo video: [`docs/demo.mp4`](docs/demo.mp4).
+Synthetic data only. Demo video: [`docs/demo.mp4`](docs/demo.mp4), recorded in preview mode because the Tide network was failing on submission day (see below).
+
+---
+
+## Status on submission day (22 Oct 2026)
+
+**What ran for real.** TideCloak `0.14.41` (`tideorg/tidecloak-dev`) runs locally under Docker. `npm run init` created the `lifekey` realm, client, roles and demo users. At 14:00 ICT one licence request succeeded: IGA was switched on, invite links were issued, and doctor-b and doctor-c linked their Tide accounts (14:24).
+
+**What the Tide network blocked.** Between 13:40 and 14:56 ICT, about ten fresh-realm attempts with three different licence emails failed in Tide's licensing service:
+
+- `setUpTideRealm` → `TIDE-IDPEXT-VENDOR-KEYGEN_FAILED`, with `[Midgard] FinalizeWallet failed` as `500 Internal Server Error`, `Not enough orks returned an ok response`, or a 100-second timeout;
+- later `[Midgard] InitializeWallet` timed out and fell through to `TIDE-IDPEXT-VENDOR-STRIPE_CHECKOUT_FAILED`.
+
+Creating the remaining Tide accounts failed with `Could not reach enough NEW ORKs (got 6 of 20 required, 13 of 20 failed)`, then `This action isn't available on your current plan … hit its user limit` (free tier `maxUserAcc = 5`, apparently used up by the failed sign-ups). Outbound access to `ork1.tideprotocol.com` from the machine and the container was fine throughout.
+
+**What that means for the demo.** We could not complete the live flow: grants signed by the approver quorum, decryption checked by the ORKs, and the `/proof` checks. The video therefore uses `npm run preview`: the same screens and flow with sample data and the Tide SDK replaced by a stand-in. **The video does not prove network enforcement**; that is what the live setup below is for.
+
+**What is verified without the network.** LifeKey's own rules (grant scopes, immutable requests, break-glass and review, hash-chained audit) by `npm test`; building and reading `RelationshipAttestation:1` policy bytes with `@tideorg/js`; and the TideCloak behaviour we rely on, checked against Tide's source code ([`docs/LifeKey-design.md`](docs/LifeKey-design.md), section 6).
 
 ---
 
@@ -29,7 +46,7 @@ npm run init                      # starts TideCloak, creates the realm and 5 de
 npm run dev                       # http://localhost:3000
 ```
 
-`npm run init` asks for your Tide licence email and your agreement to Tide's Terms & Conditions, then prints five invite links (admin, doctor-a … doctor-d). Open each in its own browser profile and link a separate Tide account. The full walkthrough, including making doctor-b and doctor-c approvers, is in [`docs/RUNBOOK.md`](docs/RUNBOOK.md).
+`npm run init` asks for your Tide licence email and your agreement to Tide's Terms & Conditions, then prints five invite links (admin, doctor-a, doctor-b, doctor-c, patient-alice; the licence allows five). Open each in its own browser profile and link a separate Tide account. The full walkthrough, including making doctor-b and doctor-c approvers, is in [`docs/RUNBOOK.md`](docs/RUNBOOK.md).
 
 Look at the screens without TideCloak (sample data, no security):
 

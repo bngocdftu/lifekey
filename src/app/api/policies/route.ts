@@ -3,7 +3,7 @@ import { withAuth } from "@/lib/auth/protect";
 import { callerFrom, json, type Caller } from "@/lib/auth/caller";
 import { ROLE_CLINICIAN, ROLE_ER_ATTENDING, ROLE_RECORDER, type GrantKind } from "@/lib/lifekey/grants.ts";
 import { effectiveStatus } from "@/lib/lifekey/requests.ts";
-import { audit, nowSeconds, withStore, type StoreShape } from "@/lib/lifekey/store.ts";
+import { audit, consentedRecords, nowSeconds, withStore, type StoreShape } from "@/lib/lifekey/store.ts";
 import { refreshRequests } from "@/lib/lifekey/sync.ts";
 
 // Hand the caller the signed policy for a record and purpose.
@@ -31,6 +31,9 @@ function pick(s: StoreShape, caller: Caller, purpose: Purpose, recordId: string,
     }
     case "break-glass": {
       if (!caller.realmRoles.includes(ROLE_ER_ATTENDING)) return { error: "er-attending only", status: 403 };
+      // A withdrawn consent stops LifeKey handing the policy out at once. The signed policy itself
+      // stays valid on the network until it expires (no per-record revocation exists).
+      if (!consentedRecords(s).find((r) => r.id === recordId)?.breakGlassEligible) return { error: "the patient has withdrawn break-glass for this record", status: 403 };
       const declared = Object.values(s.breakGlass).find((e) => e.doctorUsername === caller.username && e.recordId === recordId && now - e.declaredAt < 3600);
       if (!declared) return { error: "declare break-glass first (reason, notification, review)", status: 409 };
       return { policy: find(s, "break-glass-standing", recordId)?.policyB64 };

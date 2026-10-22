@@ -6,9 +6,9 @@ import { decryptRecord, encryptRecord, networkReason, useApi } from "@/lib/clien
 import { displayName } from "../AppShell";
 import { BarList, Donut, DotMatrix } from "../charts";
 
-const ACCOUNTS = ["admin", "doctor-a", "doctor-b", "doctor-c", "doctor-d"];
+const ACCOUNTS = ["admin", "doctor-a", "doctor-b", "doctor-c", "patient-alice"];
 // Who stops each "deny" check, from the design's test table.
-const BLOCKER: Record<string, string> = { A2: "ork", A3: "ork", A4: "ork", A5: "ork", A6: "ork", D1: "ork", D2: "ork", R1: "ork", B1: "ork", S1: "tidecloak" };
+const BLOCKER: Record<string, string> = { A2: "ork", A3: "ork", A4: "ork", A5: "ork", A6: "ork", P1: "ork", P2: "ork", P3: "ork", R1: "ork", B1: "ork", S1: "tidecloak" };
 const BLOCKER_LOOK: Record<string, { label: string; color: string }> = {
   ork: { label: "Mạng Tide chặn", color: "var(--teal)" },
   tidecloak: { label: "TideCloak chặn", color: "var(--orange)" },
@@ -79,13 +79,14 @@ export default function ProofPage() {
     },
     { id: "A6", who: ["doctor-a"], title: "A dùng quyền xem cảnh báo để đọc MED-204", expect: "deny", run: () => dec(ct("MED-204"), "MED-204", pol("tier1-standing", "T1-PAT-001")) },
     { id: "A7", who: ["doctor-a"], title: "A dùng quyền mở khẩn cấp mà không khai báo trên LifeKey. Mạng vẫn cho, vì lý do và thông báo chỉ do app kiểm soát (giới hạn đã biết)", expect: "allow", run: () => dec(ct("MED-204"), "MED-204", pol("break-glass-standing", "MED-204")) },
-    { id: "D1", who: ["doctor-d"], title: "D lấy được quyền của A và thử đọc MED-204", expect: "deny", run: () => dec(ct("MED-204"), "MED-204", jitA) },
-    { id: "D2", who: ["doctor-d"], title: "D không trực cấp cứu nhưng thử mở khẩn cấp", expect: "deny", run: () => dec(ct("MED-204"), "MED-204", pol("break-glass-standing", "MED-204")) },
-    { id: "D3", who: ["doctor-d", "doctor-a"], title: "Bác sĩ đã xác minh xem cảnh báo cấp cứu", expect: "allow", run: () => dec(ct("T1-PAT-001"), "T1-PAT-001", pol("tier1-standing", "T1-PAT-001")) },
+    { id: "A8", who: ["doctor-a"], title: "Bác sĩ đã xác minh xem cảnh báo cấp cứu", expect: "allow", run: () => dec(ct("T1-PAT-001"), "T1-PAT-001", pol("tier1-standing", "T1-PAT-001")) },
+    { id: "P1", who: ["patient-alice"], title: "Bệnh nhân lấy được quyền của A và thử đọc MED-204", expect: "deny", run: () => dec(ct("MED-204"), "MED-204", jitA) },
+    { id: "P2", who: ["patient-alice"], title: "Bệnh nhân không trực cấp cứu nhưng dùng quyền mở khẩn cấp", expect: "deny", run: () => dec(ct("MED-204"), "MED-204", pol("break-glass-standing", "MED-204")) },
+    { id: "P3", who: ["patient-alice"], title: "Bệnh nhân dùng quyền xem cảnh báo của bác sĩ để đọc bản tóm tắt của mình", expect: "deny", run: () => dec(ct("T1-PAT-001"), "T1-PAT-001", pol("tier1-standing", "T1-PAT-001")) },
     { id: "R1", who: ["admin"], title: "Phòng hồ sơ đọc lại MED-204 bằng quyền ghi", expect: "deny", run: () => dec(ct("MED-204"), "MED-204", pol("recorder-write", "MED-204")) },
     { id: "B1", who: ["doctor-b", "doctor-c"], title: "Người duyệt thử xem cảnh báo cấp cứu", expect: "deny", run: () => dec(ct("T1-PAT-001"), "T1-PAT-001", pol("tier1-standing", "T1-PAT-001")) },
     {
-      id: "S1", who: ["doctor-b", "doctor-c", "admin", "doctor-a", "doctor-d"], title: "Máy chủ dùng tài khoản quản trị để tự duyệt", expect: "deny",
+      id: "S1", who: ["doctor-b", "doctor-c", "admin", "doctor-a", "patient-alice"], title: "Máy chủ dùng tài khoản quản trị để tự duyệt", expect: "deny",
       run: async () => {
         const id = data.pendingChangeRequests[0];
         need(id);

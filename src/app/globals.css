@@ -375,6 +375,30 @@ pre.record { margin: 0; padding: 14px 16px; border-radius: var(--radius-inner); 
 .kv dd .st::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--positive); }
 .kv dd .st.none::before { background: transparent; box-shadow: inset 0 0 0 1.5px var(--label); }
 
+/* patient: emergency card and consent form */
+.emergency-card { display: grid; gap: 14px; padding: 18px; border-radius: var(--radius-inner); background: var(--neg-soft); border: 1.5px solid color-mix(in srgb, var(--negative) 30%, transparent); }
+.emergency-card .ec-head { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; align-items: baseline; }
+.emergency-card .ec-head b { color: var(--negative); font-weight: 700; letter-spacing: .02em; text-transform: uppercase; font-size: 12.5px; }
+.emergency-card .ec-head span { font-weight: 600; }
+.emergency-card dl { display: grid; gap: 8px; }
+.emergency-card dl > div { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 10px; }
+.emergency-card dt { color: var(--muted); font-size: var(--fs-small); }
+.emergency-card dd { font-weight: 600; }
+.emergency-card .qr { background: var(--surface); justify-self: start; padding: 14px; }
+.emergency-card .qr svg, .emergency-card .qr > span:first-child { width: 96px !important; height: 96px !important; }
+.consent-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 28px; }
+.consent-grid fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.consent-grid legend { font-weight: 600; margin-bottom: 8px; padding: 0; }
+.switch { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-size: var(--fs-small); white-space: nowrap; }
+.switch input { width: 18px; height: 18px; accent-color: var(--accent); margin: 0; }
+.card-field { display: grid; grid-template-columns: 170px minmax(0, 1fr); gap: 10px; align-items: center; }
+.card-field .input:disabled { opacity: .5; }
+@media (max-width: 900px) {
+  .consent-grid { grid-template-columns: minmax(0, 1fr); }
+  .card-field { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+  .emergency-card dl > div { grid-template-columns: minmax(0, 1fr); gap: 0; }
+}
+
 /* inbox */
 .inbox { display: grid; grid-template-columns: 360px minmax(0, 1fr); gap: var(--gap); align-items: start; }
 .inbox-list { display: grid; gap: 10px; }

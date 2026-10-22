@@ -206,7 +206,9 @@ rm -f "$PROJECT_DIR/data/lifekey-store.json" 2>/dev/null || true
 # Linux Docker needs the H2 volume owned by uid 1000; Docker Desktop on macOS maps it itself.
 if [ "$(uname)" = "Linux" ]; then sudo chown -R 1000:1000 "$PROJECT_DIR/data"; fi
 
-if lsof -i :8080 >/dev/null 2>&1; then
+# Docker Desktop / colima can take a few seconds to release the old container's port.
+for _ in $(seq 1 15); do lsof -nP -iTCP:8080 -sTCP:LISTEN >/dev/null 2>&1 || break; sleep 2; done
+if lsof -nP -iTCP:8080 -sTCP:LISTEN >/dev/null 2>&1; then
   echo "ERROR: Port 8080 is already in use."
   exit 1
 fi
@@ -400,13 +402,14 @@ sleep 2
 approve_and_commit clients
 
 # --- Step 7: Create the LifeKey demo users ---
-# Five people, each with their OWN Tide account (one browser profile each):
+# Five people (the licence limit), each with their OWN Tide account (one browser profile each):
 #   admin     IT / records officer. Writes records (write-only), first tide-realm-admin.
 #   doctor-a  ER attending who asks for records. NEVER an approver.
 #   doctor-b  Clinical approver (becomes tide-realm-admin after init, see docs/RUNBOOK.md).
 #   doctor-c  Access approver   (becomes tide-realm-admin after init).
-#   doctor-d  Clinician used to prove that a grant made for A does not work for D.
-LIFEKEY_USERS="admin doctor-a doctor-b doctor-c doctor-d"
+#   patient-alice  The synthetic patient PAT-001. Signs her consent, sees who opened her records,
+#             and is the "someone else" on /proof: a grant made for A must not work for her.
+LIFEKEY_USERS="admin doctor-a doctor-b doctor-c patient-alice"
 
 create_user() {
   local name="$1" first="$2" email="$3"
@@ -447,7 +450,7 @@ create_user admin    "Records Officer" "$ADMIN_EMAIL"
 create_user doctor-a "Doctor A"        "${_LOCAL}+lifekey-a@${_DOMAIN}"
 create_user doctor-b "Doctor B"        "${_LOCAL}+lifekey-b@${_DOMAIN}"
 create_user doctor-c "Doctor C"        "${_LOCAL}+lifekey-c@${_DOMAIN}"
-create_user doctor-d "Doctor D"        "${_LOCAL}+lifekey-d@${_DOMAIN}"
+create_user patient-alice "Alice Nguyen" "${_LOCAL}+lifekey-patient@${_DOMAIN}"
 
 # With IGA enabled, a user is not queryable until its change request is committed.
 echo "==> Approving user change requests..."
@@ -464,7 +467,9 @@ echo "==> Granting LifeKey roles..."
 # _tide_x.* are voucher gates only; the policies decide who reads which record.
 grant_realm_roles "$(user_id admin)"    lifekey-recorder _tide_encryptor _tide_x.selfencrypt
 grant_realm_roles "$(user_id doctor-a)" lifekey-clinician er-attending _tide_decryptor _tide_x.selfdecrypt
-grant_realm_roles "$(user_id doctor-d)" lifekey-clinician _tide_decryptor _tide_x.selfdecrypt
+# The patient holds the decrypt CAPABILITY but no policy names her or her role, so she reads
+# nothing. It makes /proof P1 a true "wrong subject" refusal, not a missing-capability one.
+grant_realm_roles "$(user_id patient-alice)" lifekey-patient _tide_decryptor _tide_x.selfdecrypt
 # B and C get no record roles: approving a request must not also let them read it.
 sleep 2
 approve_and_commit roles
@@ -497,7 +502,11 @@ echo ""
 # Every account is linked BEFORE the multiAdmin flip, so the change requests linking raises are
 # still drained server-side here instead of each needing an enclave approval afterwards.
 echo "Waiting for all five accounts to be linked (polling every 5s)..."
-for u in $LIFEKEY_USERS; do
+# The free Tide tier allows 5 user accounts, and a sign-up that fails midway can still count against
+# it. LIFEKEY_LINK_REQUIRED names who must be linked before the flip (default: everyone).
+LINK_REQUIRED="${LIFEKEY_LINK_REQUIRED:-$LIFEKEY_USERS}"
+echo "Must be linked before continuing: $LINK_REQUIRED"
+for u in $LINK_REQUIRED; do
   while true; do
     TOKEN="$(get_token)"
     KEY=$(curl -s "$TIDECLOAK_URL/admin/realms/$REALM_NAME/users?username=$u&exact=true" \

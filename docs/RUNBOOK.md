@@ -6,7 +6,9 @@ Goal: see for yourself that the Tide network **allows** the right grant and **de
 
 ```bash
 npm install
-npm run preview      # http://localhost:3100
+npm run preview      # http://localhost:3100 (dev server, compiles pages on first open)
+# For a smooth demo or video, use the production build of the preview instead:
+# npm run preview:build && npm run preview:start
 ```
 
 This mode replaces the Tide SDK with a stand-in and uses sample data; it is only for looking at the UI. Switch accounts with `?as=doctor-a` (or `admin`, `doctor-b`, `doctor-c`, `patient-alice`), or click the name at the bottom of the left sidebar. Results on the Proof page in this mode prove **nothing**, because there is no real Tide network.

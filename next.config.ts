@@ -2,6 +2,9 @@ import path from "path";
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // The preview production build (npm run preview:build) goes to its own folder, so it can run next
+  // to `next dev` without either one overwriting the other's output.
+  distDir: process.env.NEXT_DIST_DIR || ".next",
   // The dev badge sits over content on a phone; it adds nothing to a demo.
   devIndicators: false,
   // Let another device on the same hotspot or LAN open the dev/preview server.

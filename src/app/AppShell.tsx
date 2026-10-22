@@ -1,6 +1,7 @@
 "use client";
 
 import { useTideCloak } from "@tidecloak/nextjs";
+import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useApi } from "@/lib/client/api";
@@ -90,11 +91,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const item = (n: (typeof all)[number]) => {
     const active = current?.href === n.href;
     return (
-      <a key={n.href} href={n.href} className="nav-item" aria-current={active ? "page" : undefined}>
+      <Link key={n.href} href={n.href} className="nav-item" aria-current={active ? "page" : undefined}>
         <Icon name={n.icon} />
         {n.label}
         {"queue" in n && n.queue && isApprover && pending ? <span className="count">{pending}</span> : null}
-      </a>
+      </Link>
     );
   };
 
@@ -102,7 +103,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <div className="app">
       <aside className={`sidebar${open ? " open" : ""}`} aria-label="Navigation">
         <div className="row" style={{ padding: 0, minHeight: 0, alignItems: "center" }}>
-          <a href="/" className="brand"><Mark /> LifeKey</a>
+          <Link href="/" className="brand"><Mark /> LifeKey</Link>
           <button className="btn ghost icon menu-toggle" style={{ marginLeft: "auto" }} onClick={() => setOpen(false)} aria-label="Close menu"><Icon name="close" /></button>
         </div>
         <div className="scope">
@@ -123,6 +124,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               {["admin", "doctor-a", "doctor-b", "doctor-c", "patient-alice"].map((u, i) => (
                 <span key={u}>{i ? ", " : ""}<a className="link" href={`?as=${u}`}>{displayName(u)}</a></span>
               ))}
+              .{" "}
+              <button className="link" onClick={() => { try { localStorage.removeItem("lk-preview-state-v1"); } catch {} location.reload(); }}>Reset sample data</button>
             </div>
           )}
           {authenticated ? (

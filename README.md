@@ -52,6 +52,7 @@ Look at the screens without TideCloak (sample data, no security):
 
 ```bash
 npm run preview                   # http://localhost:3100?as=doctor-a
+npm run preview:build && npm run preview:start   # same screens, production build: fast, for recording
 ```
 
 Tests for LifeKey's own rules: `npm test`.

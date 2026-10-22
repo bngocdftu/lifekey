@@ -10,8 +10,11 @@ Requires Node 20 or later (`node -v`). No Docker or TideCloak needed.
 git clone https://github.com/bngocdftu/lifekey.git
 cd lifekey
 npm install
-npm run preview
+npm run preview:build    # once, about a minute
+npm run preview:start    # fast production build of the preview on port 3100
 ```
+
+Record with `preview:start`, not `npm run preview`. The dev server compiles each page the first time it opens and ships much larger scripts, so page switches can take seconds, especially from a phone on the same Wi-Fi. Stop any `npm run preview` first: both use port 3100. After changing the code, run `npm run preview:build` again.
 
 Open http://localhost:3100. Switch accounts by adding `?as=...` to the end of the address, or click the name at the bottom of the left sidebar:
 
@@ -23,7 +26,7 @@ Open http://localhost:3100. Switch accounts by adding `?as=...` to the end of th
 | Patient Alice (consent, sees who opened the record) | http://localhost:3100/me?as=patient-alice |
 | Records office | http://localhost:3100/setup?as=admin |
 
-The sample data lives in browser memory: reloading the page resets it. To record the phone layout: Chrome → right-click → Inspect → turn on the phone icon (Toggle device toolbar) → choose iPhone 14.
+The sample data is kept in this browser, so switching account keeps what the last account did (Alice's request shows up in Doctor B's queue). Before each take, click **Reset sample data** at the bottom of the left sidebar to start from the same state. To record the phone layout: Chrome → right-click → Inspect → turn on the phone icon (Toggle device toolbar) → choose iPhone 14.
 
 Screen recording on macOS: `Cmd + Shift + 5` → Record Selected Portion. On Windows: `Win + Alt + R` (Xbox Game Bar).
 

@@ -1,5 +1,6 @@
 // PREVIEW ONLY. Sample API answers for npm run preview: one patient, two requests, one break-glass
-// event and a short audit trail, all synthetic. Held in memory for the life of the page.
+// event and a short audit trail, all synthetic. Kept in this browser's localStorage, so switching
+// account (?as=…) keeps what the last account did; "Reset sample data" in the sidebar clears it.
 
 import { PATIENT, RECORDS } from "@/lib/lifekey/catalogue";
 import { applyConsent, consentChanges, recordConsent, type PatientConsent } from "@/lib/lifekey/consent";
@@ -64,8 +65,31 @@ function caller(user: string, info: { roles: string[]; approver: boolean }) {
   return { username: user, tideUserKey: KEYS[user], realmRoles: info.roles, isApprover: info.approver };
 }
 
+export const PREVIEW_STATE_KEY = "lk-preview-state-v1";
+
+// Restore what earlier accounts did in this browser. Anything unreadable falls back to the seed.
+try {
+  const saved = typeof window !== "undefined" ? localStorage.getItem(PREVIEW_STATE_KEY) : null;
+  if (saved) Object.assign(state, JSON.parse(saved));
+} catch {
+  /* private window or bad JSON: keep the seed */
+}
+
+function save() {
+  try {
+    localStorage.setItem(PREVIEW_STATE_KEY, JSON.stringify(state));
+  } catch {
+    /* storage blocked: the preview still works, it just forgets on reload */
+  }
+}
+
 export async function previewFetch(user: string, info: { roles: string[]; approver: boolean }, input: string, init: RequestInit = {}): Promise<Response> {
-  await new Promise((r) => setTimeout(r, 120));
+  const res = await answer(user, info, input, init);
+  if ((init.method ?? "GET").toUpperCase() !== "GET") save();
+  return res;
+}
+
+async function answer(user: string, info: { roles: string[]; approver: boolean }, input: string, init: RequestInit = {}): Promise<Response> {
   const url = new URL(input, "http://preview.local");
   const method = (init.method ?? "GET").toUpperCase();
   const body = init.body ? JSON.parse(String(init.body)) : {};

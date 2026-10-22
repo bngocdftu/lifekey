@@ -57,6 +57,42 @@ npm run dev                       # http://localhost:3000
 
 TideCloak `0.14.41` ran locally and the `lifekey` realm was created, but Tide's licensing service kept failing (`TIDE-IDPEXT-VENDOR-KEYGEN_FAILED`, `[Midgard] FinalizeWallet failed`, `Could not reach enough NEW ORKs`), so the approver quorum and ORK-checked decryption could not be run end to end. The demo therefore does not prove network enforcement; the live setup above is how to check it. The code paths for the live network are in `src/lib/tide/`.
 
+### Architecture
+
+```mermaid
+flowchart LR
+  subgraph People["Browsers: each person's own Tide session"]
+    DA["Doctor A<br/>requests, reads"]
+    AP["Approvers B, C, admin<br/>sign in their Tide enclave"]
+    PA["Patient Alice<br/>consent, sees openings"]
+  end
+
+  subgraph App["LifeKey (Next.js)"]
+    UI["Screens<br/>QR lookup, approvals, proof"]
+    API["API routes<br/>requests, break-glass, audit"]
+    DB[("Store<br/>ciphertext + metadata only")]
+  end
+
+  subgraph Tide["TideCloak + Tide network"]
+    TC["TideCloak realm<br/>sign-in, roles, tideuserkey"]
+    IGA["IGA quorum<br/>2 of 3 tide-realm-admin"]
+    POL["RelationshipAttestation:1 policy<br/>one doctor, one record, expiry"]
+    ORK["ORK network<br/>checks every encrypt / decrypt"]
+  end
+
+  DA -- "sign in" --> TC
+  DA -- "request access" --> UI --> API --> DB
+  API -- "file change request" --> IGA
+  AP -- "approve in enclave" --> IGA
+  IGA -- "signs at quorum" --> POL
+  DA -- "decrypt with policy" --> ORK
+  POL -.-> ORK
+  ORK -- "plaintext only for the named doctor" --> DA
+  PA -- "consent, audit view" --> UI
+```
+
+The server never holds a user key and cannot approve: grants exist only when the approver quorum signs them, and only the Tide network decides who can decrypt. Reasons, break-glass notices and the audit log are enforced by the app. In the demo, the right-hand box is simulated in the browser ([`docs/TIDECLOAK-PLAN.md`](docs/TIDECLOAK-PLAN.md)).
+
 ### Where things are
 
 | | |

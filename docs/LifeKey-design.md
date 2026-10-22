@@ -216,6 +216,8 @@ Revocation limit: plaintext that has already been viewed, screenshotted or downl
 
 ## 10. Architecture and repo
 
+The system diagram is in the [README](../README.md#architecture).
+
 | Component | Where |
 |---|---|
 | Next.js 16 + `@tidecloak/nextjs` (DPoP strict) | `src/app` |

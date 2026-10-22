@@ -14,3 +14,7 @@ branding/
 
 !data/tidecloak.json
 scripts/.init-run-snapshot.sh
+
+# scripts/demo.sh
+.preview.log
+.demo-raw.mov

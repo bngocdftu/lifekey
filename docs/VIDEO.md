@@ -2,6 +2,15 @@
 
 Organisers' requirements: an `.mp4` file, under 100 MB, placed in the repo (e.g. `docs/demo.mp4`), about 2 minutes long, in 4 parts: the new possibility, the constraint, the prototype and TideCloak's role, what changes.
 
+## Fastest way: the scripted pitch
+
+```bash
+scripts/demo.sh --auto     # starts the preview if needed, opens /pitch.html and plays it (about 2 minutes)
+scripts/demo.sh --record   # same, and records the screen into docs/demo.mp4 (needs ffmpeg)
+```
+
+`/pitch.html` walks through the four parts and drives the live app in a frame (sign in, emergency alerts, two approvers, right and wrong doctor, proof checks, patient view). Without `--auto`, step with → and ←, and press P to play. Full screen the browser (Cmd+Ctrl+F) before recording.
+
 ## Run the preview on the recording machine
 
 Requires Node 20 or later (`node -v`). No Docker or TideCloak needed.

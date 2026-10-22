@@ -1,0 +1,394 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LifeKey Pitch</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* LifeKey pitch: four parts, then the live prototype driven in a frame. Served by the app at
+   /pitch.html so the frame is same-origin and can be stepped through. Keys: → / space next,
+   ← back, P play/pause. ?auto=1 plays the whole thing (about two minutes) after a countdown. */
+:root {
+  --wash-top: #e7eef2; --wash-mid: #eef1f4; --wash-bottom: #f7e9e9;
+  --surface: #fff; --well: #f2f5f7; --line: #edf0f2;
+  --text: #18232a; --muted: #5f6b74;
+  --accent: #1f8197; --accent-soft: #e3f2f5;
+  --pink: #e14b77; --pink-soft: #fde9ef; --orange: #e57a2e; --orange-soft: #fdeedf;
+  --green: #2f9a62; --green-soft: #e2f4ea; --negative: #c43a3f; --neg-soft: #fdeceb;
+  --primary: #12212a;
+  --shadow: 0 1px 2px rgba(18,33,42,.04), 0 10px 28px rgba(18,33,42,.06);
+  --radius: 22px;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body {
+  font-family: "Be Vietnam Pro", system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: var(--text);
+  background: linear-gradient(180deg, var(--wash-top), var(--wash-mid) 50%, var(--wash-bottom));
+  overflow: hidden;
+}
+.slide { position: absolute; inset: 0; padding: 5vh 6vw 9vh; display: none; flex-direction: column; justify-content: center; gap: 3.2vh; }
+.slide.on { display: flex; animation: in 500ms ease both; }
+@keyframes in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+.kicker { display: inline-flex; align-items: center; gap: 12px; font-size: clamp(13px, 1.1vw, 17px); font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+.kicker b { display: grid; place-items: center; width: 2em; height: 2em; border-radius: 50%; background: var(--accent); color: #fff; letter-spacing: 0; }
+h1 { margin: 0; font-size: clamp(34px, 4.6vw, 76px); line-height: 1.05; letter-spacing: -.02em; font-weight: 700; max-width: 18ch; }
+h2 { margin: 0; font-size: clamp(28px, 3.4vw, 56px); line-height: 1.1; letter-spacing: -.015em; font-weight: 700; max-width: 22ch; }
+.lead { margin: 0; font-size: clamp(16px, 1.6vw, 26px); line-height: 1.45; color: var(--muted); max-width: 46ch; }
+.row { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; }
+.card { background: var(--surface); border-radius: var(--radius); padding: clamp(16px, 1.8vw, 28px); box-shadow: var(--shadow); }
+.card h3 { margin: 10px 0 6px; font-size: clamp(16px, 1.4vw, 22px); }
+.card p { margin: 0; color: var(--muted); font-size: clamp(14px, 1.1vw, 18px); line-height: 1.45; }
+.tile { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 14px; font-size: 22px; }
+.alert { display: flex; align-items: center; gap: 14px; }
+.alert .tile { flex: none; }
+.alert b { display: block; font-size: clamp(15px, 1.3vw, 21px); }
+.alert span { color: var(--muted); font-size: clamp(13px, 1vw, 16px); }
+.brand { display: flex; align-items: center; gap: 14px; font-weight: 700; font-size: clamp(20px, 1.8vw, 28px); }
+.mark { width: 1.6em; height: 1.6em; border-radius: .5em; background: var(--accent); display: grid; place-items: center; color: #fff; }
+.flow { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; align-items: stretch; }
+.flow .card { position: relative; }
+.flow .card + .card::before { content: "→"; position: absolute; left: -14px; top: 50%; transform: translate(-50%, -50%); color: var(--accent); font-weight: 700; }
+.who { font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--accent); }
+.vs { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.vs .card.bad { border: 2px solid var(--neg-soft); }
+.vs .card.good { border: 2px solid var(--accent-soft); }
+.vs ul { margin: 10px 0 0; padding-left: 20px; color: var(--muted); font-size: clamp(14px, 1.15vw, 19px); line-height: 1.6; }
+
+/* the live prototype */
+.slide.demo { padding: 3vh 3vw 8vh; flex-direction: row; align-items: stretch; gap: 2.4vw; }
+.side { flex: 0 0 min(30vw, 420px); display: flex; flex-direction: column; justify-content: center; gap: 2.4vh; }
+.side h2 { font-size: clamp(24px, 2.4vw, 40px); }
+.step { font-size: clamp(16px, 1.35vw, 22px); line-height: 1.45; }
+.tide { border-left: 4px solid var(--accent); background: var(--surface); border-radius: 0 16px 16px 0; padding: 14px 18px; font-size: clamp(14px, 1.1vw, 17px); line-height: 1.5; box-shadow: var(--shadow); }
+.tide b { color: var(--accent); }
+.badge { align-self: flex-start; font-size: 12px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); background: rgba(255,255,255,.7); padding: 6px 10px; border-radius: 99px; }
+.screen { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--surface); border-radius: var(--radius); box-shadow: 0 20px 60px rgba(18,33,42,.14); overflow: hidden; }
+.bar { flex: none; display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.bar i { width: 11px; height: 11px; border-radius: 50%; background: var(--line); }
+.bar code { margin-left: 10px; flex: 1; background: var(--well); border-radius: 99px; padding: 5px 14px; font: 13px ui-monospace, Menlo, monospace; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.viewport { position: relative; flex: 1; overflow: hidden; }
+.viewport iframe { position: absolute; top: 0; left: 0; width: 1280px; height: 800px; border: 0; background: #eef1f4; transform-origin: 0 0; }
+
+/* chrome */
+.progress { position: fixed; left: 6vw; right: 6vw; bottom: 3.4vh; display: flex; gap: 8px; }
+.progress span { flex: 1; height: 4px; border-radius: 4px; background: rgba(18,33,42,.1); overflow: hidden; }
+.progress span i { display: block; height: 100%; width: 0; background: var(--accent); }
+.progress span.done i { width: 100%; }
+.hint { position: fixed; right: 6vw; bottom: 5.6vh; font-size: 12px; color: var(--muted); }
+.count { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(231,238,242,.9); font-size: 18vh; font-weight: 700; color: var(--accent); z-index: 10; }
+.count[hidden] { display: none; }
+@media (max-width: 760px) {
+  body { overflow: auto; }
+  .flow, .vs { grid-template-columns: 1fr; }
+  .flow .card + .card::before { display: none; }
+  .slide.demo { flex-direction: column; }
+  .side { flex: none; }
+  .screen { min-height: 60vh; }
+}
+@media (prefers-reduced-motion: reduce) { .slide.on { animation: none; } }
+</style>
+</head>
+<body>
+
+<!-- 0 · title -->
+<section class="slide" data-part="0" data-secs="5">
+  <div class="brand"><span class="mark">+</span>LifeKey</div>
+  <h1>An emergency medical passport no single person can open.</h1>
+  <p class="lead">ER doctors see the alerts that keep a patient alive at once. The full record opens only for one named doctor, one record, for a short time, approved by two people and enforced by the Tide network.</p>
+  <p class="badge">RMIT Unlocked · Challenge 2 · TideCloak</p>
+</section>
+
+<!-- 1 · the possibility -->
+<section class="slide" data-part="1" data-secs="15">
+  <span class="kicker"><b>1</b>The possibility</span>
+  <h2>3 a.m. An unconscious patient arrives in the ER.</h2>
+  <p class="lead">In the first minute the doctor must know four things. LifeKey shows them from a QR code on the patient's card, and opens the detailed record only when it is really needed.</p>
+  <div class="row">
+    <div class="card alert"><span class="tile" style="background:var(--pink-soft)">💊</span><div><b>On warfarin</b><span>Bleeding risk</span></div></div>
+    <div class="card alert"><span class="tile" style="background:var(--orange-soft)">⚠️</span><div><b>Penicillin allergy</b><span>Anaphylaxis</span></div></div>
+    <div class="card alert"><span class="tile" style="background:var(--accent-soft)">❤️</span><div><b>Mechanical heart valve</b><span>No MRI without checking</span></div></div>
+    <div class="card alert"><span class="tile" style="background:var(--green-soft)">🩸</span><div><b>Blood type O+</b><span>Emergency contact on file</span></div></div>
+  </div>
+</section>
+
+<!-- 2 · the constraint -->
+<section class="slide" data-part="2" data-secs="15">
+  <span class="kicker"><b>2</b>The constraint</span>
+  <h2>Whoever runs the server can read every record.</h2>
+  <div class="vs">
+    <div class="card bad">
+      <h3>Today</h3>
+      <ul>
+        <li>The server and its admins hold the keys</li>
+        <li>One breach or one insider exposes every patient</li>
+        <li>"Break the glass" is a checkbox an admin can bypass</li>
+        <li>So hospitals keep detailed records locked away, even in an emergency</li>
+      </ul>
+    </div>
+    <div class="card good">
+      <h3>What we need</h3>
+      <ul>
+        <li>Access for one doctor, one record, a short time</li>
+        <li>No single admin, server or AI can grant it alone</li>
+        <li>A leaked grant or ciphertext is useless to anyone else</li>
+        <li>The patient can see who opened what</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- 3 · the prototype: how it fits together -->
+<section class="slide" data-part="3" data-secs="11">
+  <span class="kicker"><b>3</b>The prototype and TideCloak's role</span>
+  <h2>Every record is encrypted on its own. TideCloak decides who may open it.</h2>
+  <div class="flow">
+    <div class="card"><div class="who">TideCloak</div><h3>Sign in</h3><p>Each doctor has a Tide key; the token carries their roles.</p></div>
+    <div class="card"><div class="who">Doctor A</div><h3>Request</h3><p>One record, a reason, expires in 2 hours.</p></div>
+    <div class="card"><div class="who">TideCloak quorum</div><h3>2 of 3 sign</h3><p>Approvers sign in their own enclave. Never the requester.</p></div>
+    <div class="card"><div class="who">Policy</div><h3>RelationshipAttestation</h3><p>Names A's key, the record id and the expiry.</p></div>
+    <div class="card"><div class="who">Tide network</div><h3>Checks every decrypt</h3><p>Wrong person, record, operation or time: refused.</p></div>
+  </div>
+</section>
+
+<!-- 3 · the prototype, live -->
+<section class="slide demo" data-part="3" data-secs="9" data-scene="signin">
+  <div class="side">
+    <span class="kicker"><b>3</b>Prototype · sign in</span>
+    <p class="step">Doctor A signs in with Tide. LifeKey never sees a password or a key.</p>
+    <p class="tide"><b>TideCloak:</b> issues the token with <code>tideuserkey</code> and realm roles <code>lifekey-clinician</code>, <code>er-attending</code>, <code>_tide_decryptor</code>.</p>
+    <span class="badge">Preview · TideCloak simulated in the browser</span>
+  </div>
+  <div class="screen"><div class="bar"><i></i><i></i><i></i><code></code></div><div class="viewport"></div></div>
+</section>
+
+<section class="slide demo" data-part="3" data-secs="9" data-scene="alerts">
+  <div class="side">
+    <span class="kicker"><b>3</b>Prototype · scan the QR</span>
+    <p class="step">The emergency summary opens at once: allergies, medicines, implants. Detailed records are locked, each on its own.</p>
+    <p class="tide"><b>TideCloak:</b> a standing policy lets verified clinicians decrypt the summary, and nothing else.</p>
+    <span class="badge">Preview · TideCloak simulated in the browser</span>
+  </div>
+  <div class="screen"><div class="bar"><i></i><i></i><i></i><code></code></div><div class="viewport"></div></div>
+</section>
+
+<section class="slide demo" data-part="3" data-secs="13" data-scene="approve">
+  <div class="side">
+    <span class="kicker"><b>3</b>Prototype · two approvers</span>
+    <p class="step">Doctor A asked to read MED-205. Doctor B already signed. Doctor C reviews the reason and signs in the Tide enclave.</p>
+    <p class="tide"><b>TideCloak:</b> only <code>tide-realm-admin</code> holders vote, the requester cannot, and the grant exists only at 2 of 3.</p>
+    <span class="badge">Preview · TideCloak simulated in the browser</span>
+  </div>
+  <div class="screen"><div class="bar"><i></i><i></i><i></i><code></code></div><div class="viewport"></div></div>
+</section>
+
+<section class="slide demo" data-part="3" data-secs="8" data-scene="read-a">
+  <div class="side">
+    <span class="kicker"><b>3</b>Prototype · the right doctor</span>
+    <p class="step">Doctor A opens the medication record with the grant made for A.</p>
+    <p class="tide"><b>Tide network:</b> subject is A's key, tag is the record id, role <code>_tide_decryptor</code>, not expired: allowed.</p>
+    <span class="badge">Preview · TideCloak simulated in the browser</span>
+  </div>
+  <div class="screen"><div class="bar"><i></i><i></i><i></i><code></code></div><div class="viewport"></div></div>
+</section>
+
+<section class="slide demo" data-part="3" data-secs="8" data-scene="read-b">
+  <div class="side">
+    <span class="kicker"><b>3</b>Prototype · the wrong doctor</span>
+    <p class="step">Doctor B tries the same record. B even approved A's grant.</p>
+    <p class="tide"><b>Two locks:</b> LifeKey will not hand B a grant that names A. And if B steals it anyway, the Tide network refuses: "subjectId does not match" (next).</p>
+    <span class="badge">Preview · TideCloak simulated in the browser</span>
+  </div>
+  <div class="screen"><div class="bar"><i></i><i></i><i></i><code></code></div><div class="viewport"></div></div>
+</section>
+
+<section class="slide demo" data-part="3" data-secs="11" data-scene="proof">
+  <div class="side">
+    <span class="kicker"><b>3</b>Prototype · proof</span>
+    <p class="step">The proof page runs the attacks: a stolen grant, the wrong record, the server approving on its own.</p>
+    <p class="tide"><b>Every one is refused</b> with the contract's own reason, like B2: B using A's stolen grant. The server stores only ciphertext and cannot sign.</p>
+    <span class="badge">Preview · TideCloak simulated in the browser</span>
+  </div>
+  <div class="screen"><div class="bar"><i></i><i></i><i></i><code></code></div><div class="viewport"></div></div>
+</section>
+
+<!-- 4 · what changes -->
+<section class="slide demo" data-part="4" data-secs="7" data-scene="patient">
+  <div class="side">
+    <span class="kicker"><b>4</b>What changes</span>
+    <p class="step">Alice chooses which records a break-glass may open, and sees every opening.</p>
+    <p class="tide"><b>The patient</b> holds the story of her own record.</p>
+  </div>
+  <div class="screen"><div class="bar"><i></i><i></i><i></i><code></code></div><div class="viewport"></div></div>
+</section>
+
+<section class="slide" data-part="4" data-secs="9">
+  <span class="kicker"><b>4</b>What changes</span>
+  <h2>Emergency teams see what matters, without exposing everything.</h2>
+  <div class="row">
+    <div class="card"><span class="tile" style="background:var(--pink-soft)">🧑‍⚕️</span><h3>Doctors</h3><p>Life-saving alerts in seconds; a full record in minutes, with two colleagues' signatures.</p></div>
+    <div class="card"><span class="tile" style="background:var(--accent-soft)">🙋</span><h3>Patients</h3><p>Share the essentials, decide what break-glass may open, see who opened what.</p></div>
+    <div class="card"><span class="tile" style="background:var(--green-soft)">🏥</span><h3>Hospitals</h3><p>Can show that no single admin, server or AI can open a record alone.</p></div>
+  </div>
+  <p class="lead">github.com/bngocdftu/lifekey · synthetic data only</p>
+</section>
+
+<div class="progress"></div>
+<div class="hint">→ next · ← back · P play</div>
+<div class="count" hidden></div>
+
+<script>
+const slides = [...document.querySelectorAll(".slide")];
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+let at = -1, playing = false, timer = null, run = 0;
+
+// One progress segment per part.
+const parts = [...new Set(slides.map((s) => s.dataset.part))];
+const progress = document.querySelector(".progress");
+parts.forEach(() => progress.appendChild(document.createElement("span")).appendChild(document.createElement("i")));
+
+// ---------- driving the app in the frame ----------
+const ORIGIN = location.origin;
+function frameFor(slide) {
+  const vp = slide.querySelector(".viewport");
+  let f = vp.querySelector("iframe");
+  if (!f) {
+    f = document.createElement("iframe");
+    f.title = "LifeKey app";
+    vp.appendChild(f);
+    new ResizeObserver(() => fit(vp, f)).observe(vp);
+  }
+  fit(vp, f);
+  return f;
+}
+// Render the app at a 1280px desktop width, scaled to the frame, and as tall as the frame allows.
+function fit(vp, f) {
+  const s = vp.clientWidth / 1280 || 1;
+  f.style.transform = `scale(${s})`;
+  f.style.height = `${Math.max(vp.clientHeight / s, 600)}px`;
+}
+function open(slide, path) {
+  const f = frameFor(slide);
+  slide.querySelector(".bar code").textContent = `localhost:3100${path}`;
+  return new Promise((resolve) => {
+    f.onload = () => resolve(f.contentDocument);
+    f.src = ORIGIN + path;
+  });
+}
+async function waitFor(fn, ms = 6000) {
+  const end = Date.now() + ms;
+  while (Date.now() < end) {
+    try { const v = fn(); if (v) return v; } catch { /* page still rendering */ }
+    await sleep(120);
+  }
+  return null;
+}
+const byText = (doc, sel, re) => [...doc.querySelectorAll(sel)].find((e) => re.test(e.textContent.trim()));
+const focus = (el) => el && el.scrollIntoView({ behavior: "smooth", block: "center" });
+function type(doc, input, value) {
+  const set = Object.getOwnPropertyDescriptor(doc.defaultView.HTMLInputElement.prototype, "value").set;
+  set.call(input, value);
+  input.dispatchEvent(new doc.defaultView.Event("input", { bubbles: true }));
+}
+const alive = (id) => id === run;
+
+const SCENES = {
+  async signin(slide, id) {
+    try { localStorage.removeItem("lk-sim-tide-session-v1"); localStorage.removeItem("lk-preview-as"); } catch {}
+    const doc = await open(slide, "/");
+    const btn = await waitFor(() => byText(doc, "button", /^Sign in with Tide$/));
+    await sleep(1200); if (!alive(id)) return;
+    btn?.click();
+    const pw = await waitFor(() => doc.querySelector("[aria-labelledby=sim-signin-title] input[type=password]"));
+    await sleep(1400); if (!alive(id) || !pw) return;
+    for (let i = 1; i <= 8; i++) { type(doc, pw, "•".repeat(i)); await sleep(90); }
+    await sleep(900); if (!alive(id)) return;
+    doc.querySelector("[aria-labelledby=sim-signin-title] button[type=submit]")?.click();
+  },
+  async alerts(slide, id) {
+    const doc = await open(slide, "/emergency/p_8f29a1?as=doctor-a");
+    await waitFor(() => byText(doc, "button", /^Read record$/), 8000);
+    await sleep(3500); if (!alive(id)) return;
+    doc.defaultView.scrollBy({ top: 420, behavior: "smooth" });
+    await sleep(3000); if (!alive(id)) return;
+    doc.defaultView.scrollBy({ top: 420, behavior: "smooth" });
+  },
+  async approve(slide, id) {
+    const doc = await open(slide, "/approve?as=doctor-c");
+    const item = await waitFor(() => byText(doc, ".inbox-item", /MED-205/), 8000);
+    await sleep(1500); if (!alive(id)) return;
+    item?.click();
+    await sleep(2500); if (!alive(id)) return;
+    const approve = await waitFor(() => byText(doc, "button", /^Approve$/));
+    focus(approve); await sleep(1200); if (!alive(id)) return;
+    approve?.click();
+    const ok = await waitFor(() => doc.querySelector("[data-ok]"));
+    await sleep(3000); if (!alive(id)) return;
+    ok?.click();
+    await sleep(1500); if (!alive(id)) return;
+    focus(byText(doc, "div, p, span", /2\s*\/\s*2/));
+  },
+  async "read-a"(slide, id) { await readAs(slide, id, "doctor-a"); },
+  async "read-b"(slide, id) { await readAs(slide, id, "doctor-b"); },
+  async proof(slide, id) {
+    const doc = await open(slide, "/proof?as=doctor-b");
+    const btn = await waitFor(() => byText(doc, "button", /^Run \d+ checks$/), 8000);
+    await sleep(1500); if (!alive(id)) return;
+    btn?.click();
+    await sleep(2500); if (!alive(id)) return;
+    focus(doc.querySelector("table"));
+  },
+  async patient(slide, id) {
+    const doc = await open(slide, "/me?as=patient-alice");
+    await sleep(3500); if (!alive(id)) return;
+    doc.defaultView.scrollBy({ top: 500, behavior: "smooth" });
+  },
+};
+async function readAs(slide, id, who) {
+  const doc = await open(slide, `/emergency/p_8f29a1?as=${who}`);
+  const btn = await waitFor(() => byText(doc, "button", /^Read record$/), 8000);
+  focus(btn); await sleep(1800); if (!alive(id)) return;
+  btn?.click();
+  await sleep(1200); if (!alive(id)) return;
+  focus(btn);
+}
+
+// ---------- slides ----------
+function show(i) {
+  if (i < 0 || i >= slides.length) { pause(); return; }
+  at = i; run++;
+  slides.forEach((s, k) => s.classList.toggle("on", k === i));
+  const s = slides[i];
+  const part = parts.indexOf(s.dataset.part);
+  [...progress.children].forEach((p, k) => p.classList.toggle("done", k <= part));
+  if (s.dataset.scene) SCENES[s.dataset.scene](s, run).catch((e) => console.warn("scene", s.dataset.scene, e));
+  clearTimeout(timer);
+  if (playing) timer = setTimeout(() => show(at + 1), Number(s.dataset.secs) * 1000);
+}
+function play() { playing = true; show(at < 0 || at >= slides.length - 1 ? 0 : at); }
+function pause() { playing = false; clearTimeout(timer); }
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "ArrowRight" || e.key === " " || e.key === "PageDown") { e.preventDefault(); show(Math.min(at + 1, slides.length - 1)); }
+  else if (e.key === "ArrowLeft" || e.key === "PageUp") show(Math.max(at - 1, 0));
+  else if (e.key.toLowerCase() === "p") playing ? pause() : play();
+});
+
+// Start from the same sample data every time, then show the title (or count down and play).
+try { localStorage.removeItem("lk-preview-state-v1"); } catch {}
+if (new URLSearchParams(location.search).has("auto")) {
+  const c = document.querySelector(".count");
+  c.hidden = false;
+  (async () => {
+    for (const n of [3, 2, 1]) { c.textContent = n; await sleep(1000); }
+    c.hidden = true;
+    play();
+  })();
+} else {
+  show(0);
+}
+</script>
+</body>
+</html>
